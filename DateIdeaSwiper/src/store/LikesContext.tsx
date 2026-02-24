@@ -1,13 +1,8 @@
 import React, { createContext, useContext, useState } from "react";
-
-type DateIdea = {
-  id: string;
-  title: string;
-  category: string;
-};
+import { DateIdea } from "../types/date";
 
 type LikesContextType = {
-  liked: DateIdea[];
+  likes: DateIdea[];
   addLike: (date: DateIdea) => void;
   removeLike: (id: string) => void;
 };
@@ -15,18 +10,21 @@ type LikesContextType = {
 const LikesContext = createContext<LikesContextType | undefined>(undefined);
 
 export function LikesProvider({ children }: { children: React.ReactNode }) {
-  const [liked, setLiked] = useState<DateIdea[]>([]);
+  const [likes, setLikes] = useState<DateIdea[]>([]);
 
-  const addLike = (date: DateIdea) => {
-    setLiked(prev => [...prev, date]);
+  const addLike = (item: DateIdea) => {
+    setLikes(prev => {
+      if (prev.find(x => x.id === item.id)) return prev;
+      return [...prev, item];
+    });
   };
 
   const removeLike = (id: string) => {
-    setLiked(prev => prev.filter(item => item.id !== id));
+    setLikes(prev => prev.filter(item => item.id !== id));
   };
 
   return (
-    <LikesContext.Provider value={{ liked, addLike, removeLike }}>
+    <LikesContext.Provider value={{ likes, addLike, removeLike }}>
       {children}
     </LikesContext.Provider>
   );
