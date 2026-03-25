@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { router, useFocusEffect } from "expo-router";
 import Swiper from "react-native-deck-swiper";
 import { useFonts, DancingScript_700Bold } from "@expo-google-fonts/dancing-script";
+import { LinearGradient } from "expo-linear-gradient";
 
 import DateCard from "../../components/DateCard";
 import { useLikes } from "../../store/LikesContext";
@@ -29,9 +30,24 @@ export default function Home() {
   // 🔐 auth guard
   useFocusEffect(
     useCallback(() => {
-      supabase.auth.getSession().then(({ data }) => {
-        if (!data.session) router.replace("../auth/login");
-      });
+      let active = true;
+      (async () => {
+        try {
+          const { data, error } = await supabase.auth.getSession();
+          if (!active) return;
+          if (error) {
+            console.log(error);
+            return;
+          }
+          if (!data.session) router.replace("../auth/login");
+        } catch (error) {
+          if (active) console.log(error);
+        }
+      })();
+
+      return () => {
+        active = false;
+      };
     }, [])
   );
 
@@ -59,18 +75,31 @@ export default function Home() {
     }
   }
   const loadSeen = useCallback(async () => {
-    const { data: userData } = await supabase.auth.getUser();
-    const user = userData.user;
-    if (!user) return;
+    try {
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (userError) {
+        console.log(userError);
+        return;
+      }
+      const user = userData.user;
+      if (!user) return;
 
-    const { data } = await supabase
-      .from("swipes")
-      .select("date_id")
-      .eq("user_id", user.id);
+      const { data, error } = await supabase
+        .from("swipes")
+        .select("date_id")
+        .eq("user_id", user.id);
 
-    if (data) setSeenIds(data.map(x => String(x.date_id)));
+      if (error) {
+        console.log(error);
+        return;
+      }
 
-    setLoading(false);
+      if (data) setSeenIds(data.map(x => String(x.date_id)));
+    } catch (error) {
+      console.log(error);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   const loadDates = useCallback(async () => {
@@ -128,12 +157,15 @@ export default function Home() {
         </View>
       </View>
       <View style={styles.swiperWrap}>
-        <View style={[styles.sideHint, styles.sideHintLeft]}>
-          <Text style={styles.sideHintText}>PASS</Text>
-        </View>
-        <View style={[styles.sideHint, styles.sideHintRight]}>
-          <Text style={styles.sideHintText}>LIKE</Text>
-        </View>
+        <LinearGradient
+          colors={["#ff1f1f", "rgba(255, 255, 255, 0)", "#00d26a"]}
+          locations={[0, 0.5, 1]}
+          start={{ x: 0, y: 0.5 }}
+          end={{ x: 1, y: 0.5 }}
+          style={styles.gradientHint}
+        />
+        <Text style={[styles.sideHintText, styles.sideHintTextLeft]}>PASS</Text>
+        <Text style={[styles.sideHintText, styles.sideHintTextRight]}>LIKE</Text>
         <Swiper
           cards={filteredDates}
           renderCard={(card) => <DateCard item={card} />}
@@ -227,25 +259,16 @@ const styles = StyleSheet.create({
     alignSelf: "center",
     marginLeft: (Dimensions.get("window").width - CARD_WIDTH) / 2,
   },
-  sideHint: {
+  gradientHint: {
     position: "absolute",
     top: "50%",
-    width: 56,
+    left: 8,
+    right: 8,
     height: 320,
     borderRadius: 20,
-    opacity: 0.55,
+    opacity: 0.45,
     zIndex: 0,
     marginTop: -160,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  sideHintLeft: {
-    left: 8,
-    backgroundColor: "#ff1f1f",
-  },
-  sideHintRight: {
-    right: 8,
-    backgroundColor: "#00d26a",
   },
   sideHintText: {
     fontSize: 18,
@@ -253,6 +276,20 @@ const styles = StyleSheet.create({
     color: "#000000",
     letterSpacing: 0.8,
     transform: [{ rotate: "-90deg" }],
+  },
+  sideHintTextLeft: {
+    position: "absolute",
+    top: "50%",
+    left: 18,
+    marginTop: -20,
+    zIndex: 1,
+  },
+  sideHintTextRight: {
+    position: "absolute",
+    top: "50%",
+    right: 18,
+    marginTop: -20,
+    zIndex: 1,
   },
   emptyState: {
     flex: 1,

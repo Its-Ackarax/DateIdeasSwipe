@@ -16,55 +16,60 @@ export default function Matches() {
     try {
       const dateIdeas = await getDateIdeas();
       setDates(dateIdeas);
-    } catch (error) {
-      console.log(error);
-    }
-    const { data: userData } = await supabase.auth.getUser();
-    const user = userData.user;
-    if (!user) {
-      setHasCouple(false);
-      setMatches([]);
-      setLoading(false);
-      return;
-    }
 
-    const { data: couple } = await supabase
-      .from("couples")
-      .select("*")
-      .or(`user1.eq.${user.id},user2.eq.${user.id}`)
-      .single();
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (userError) throw userError;
 
-    if (!couple) {
-      setHasCouple(false);
-      setMatches([]);
-      setLoading(false);
-      return;
-    }
-    const partnerId =
-      couple.user1 === user.id ? couple.user2 : couple.user1;
+      const user = userData.user;
+      if (!user) {
+        setHasCouple(false);
+        setMatches([]);
+        return;
+      }
 
-    if (!partnerId) {
-      setHasCouple(false);
-      setMatches([]);
-      setLoading(false);
-      return;
-    }
+      const { data: couple, error: coupleError } = await supabase
+        .from("couples")
+        .select("*")
+        .or(`user1.eq.${user.id},user2.eq.${user.id}`)
+        .single();
 
-    setHasCouple(true);
+      if (coupleError) throw coupleError;
 
-    const { data } = await supabase
-      .from("matches")
-      .select("date_id")
-      .eq("couple_id", couple.id);
+      if (!couple) {
+        setHasCouple(false);
+        setMatches([]);
+        return;
+      }
+      const partnerId =
+        couple.user1 === user.id ? couple.user2 : couple.user1;
 
-    if (data && data.length > 0) {
-      setMatches(data.map((x) => String(x.date_id)));
-    } else {
-      const { data: swipeData } = await supabase
+      if (!partnerId) {
+        setHasCouple(false);
+        setMatches([]);
+        return;
+      }
+
+      setHasCouple(true);
+
+      const { data: matchData, error: matchError } = await supabase
+        .from("matches")
+        .select("date_id")
+        .eq("couple_id", couple.id);
+
+      if (matchError) throw matchError;
+
+      if (matchData && matchData.length > 0) {
+        setMatches(matchData.map((x) => String(x.date_id)));
+        return;
+      }
+
+      const { data: swipeData, error: swipeError } = await supabase
         .from("swipes")
         .select("date_id, user_id")
         .in("user_id", [user.id, partnerId])
         .eq("liked", true);
+
+      if (swipeError) throw swipeError;
 
       if (swipeData) {
         const likedByDate = new Map<string, Set<string>>();
@@ -88,8 +93,13 @@ export default function Matches() {
       } else {
         setMatches([]);
       }
+    } catch (error) {
+      console.log(error);
+      setMatches([]);
+      setHasCouple(false);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   useFocusEffect(
@@ -97,24 +107,6 @@ export default function Matches() {
       loadMatches();
     }, [loadMatches])
   );
-
-  if (hasCouple === false) {
-    return (
-      <View style={{ flex: 1, padding: 20, justifyContent: "center" }}>
-        <Text style={{ fontSize: 18, textAlign: "center", color: "#444" }}>
-          Link accounts with someone to see your matching dates.
-        </Text>
-      </View>
-    );
-  }
-
-  if (loading) {
-    return (
-      <View style={{ flex: 1, justifyContent: "center" }}>
-        <ActivityIndicator size="large" />
-      </View>
-    );
-  }
 
   const matchedIdeas = useMemo(() => {
     const matchSet = new Set(matches);
@@ -139,6 +131,24 @@ export default function Matches() {
         data: data.sort((a, b) => a.title.localeCompare(b.title)),
       }));
   }, [matchedIdeas]);
+
+  if (hasCouple === false) {
+    return (
+      <View style={{ flex: 1, padding: 20, justifyContent: "center" }}>
+        <Text style={{ fontSize: 18, textAlign: "center", color: "#444" }}>
+          Link accounts with someone to see your matching dates.
+        </Text>
+      </View>
+    );
+  }
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: "center" }}>
+        <ActivityIndicator size="large" />
+      </View>
+    );
+  }
 
   return (
     <View style={{ flex: 1, padding: 20 }}>
