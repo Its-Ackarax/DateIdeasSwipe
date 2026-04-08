@@ -1,6 +1,7 @@
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { Button, Text, TextInput, View } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { supabase } from "../../lib/supabase";
 import { generateCode } from "../../services/generateCode";
 import { saveMatch } from "../../services/saveMatch";
@@ -134,12 +135,32 @@ export default function LinkPartner() {
   }
 
   return (
-    <View style={{ flex: 1, justifyContent: "center", alignItems: "center", gap: 15 }}>
-      <Text style={{ fontSize: 22 }}>Link Partner</Text>
+    <LinearGradient
+      colors={["#fda4af", "#fff1f2"]}
+      style={{
+        flex: 1,
+        justifyContent: "center",
+        alignItems: "center",
+        gap: 15,
+        padding: 20,
+      }}
+    >
+      <Text style={{ fontSize: 22, color: "#111827", fontWeight: "600" }}>
+        Link Partner
+      </Text>
 
-      <Button title="Generate Invite Code" onPress={createInvite} disabled={loading} />
+      <Button
+        title="Generate Invite Code"
+        onPress={createInvite}
+        disabled={loading}
+        color="#2563eb"
+      />
 
-      {code && <Text>Your code: {code}</Text>}
+      {code && (
+        <Text style={{ color: "#7f1d1d", fontWeight: "600" }}>
+          Your code: {code}
+        </Text>
+      )}
 
       <TextInput
         placeholder="Enter partner code"
@@ -151,10 +172,17 @@ export default function LinkPartner() {
           padding: 10,
           borderRadius: 8,
           textAlign: "center",
+          borderColor: "#cbd5f5",
+          backgroundColor: "#ffffff",
         }}
       />
 
-      <Button title="Join Partner" onPress={joinPartner} disabled={loading} />
-    </View>
+      <Button
+        title="Join Partner"
+        onPress={joinPartner}
+        disabled={loading}
+        color="#1d4ed8"
+      />
+    </LinearGradient>
   );
 }

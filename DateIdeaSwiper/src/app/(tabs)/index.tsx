@@ -143,8 +143,11 @@ export default function Home() {
   }
 
   return (
-    <View style={styles.page}>
-      <View style={styles.heroBackground} />
+    <LinearGradient
+      colors={["#fb7185", "#fff1f2", "#fff1f2"]}
+      locations={[0, 0.35, 1]}
+      style={styles.page}
+    >
       <View style={styles.header}>
         <View style={styles.headerCard}>
           <View style={styles.headerTitleRow}>
@@ -158,7 +161,7 @@ export default function Home() {
       </View>
       <View style={styles.swiperWrap}>
         <LinearGradient
-          colors={["#ff1f1f", "rgba(255, 255, 255, 0)", "#00d26a"]}
+          colors={["#ff0033", "rgba(255, 255, 255, 0)", "#00f56a"]}
           locations={[0, 0.5, 1]}
           start={{ x: 0, y: 0.5 }}
           end={{ x: 1, y: 0.5 }}
@@ -178,7 +181,7 @@ export default function Home() {
           cardStyle={styles.cardStyle}
         />
       </View>
-    </View>
+    </LinearGradient>
   );
 }
 
@@ -187,7 +190,6 @@ const CARD_WIDTH = Math.round(Dimensions.get("window").width * 0.88);
 const styles = StyleSheet.create({
   page: {
     flex: 1,
-    backgroundColor: "#fdf2f8",
     paddingTop: 24,
     paddingHorizontal: 0,
   },
@@ -266,7 +268,9 @@ const styles = StyleSheet.create({
     right: 8,
     height: 320,
     borderRadius: 20,
-    opacity: 0.45,
+    opacity: 0.55,
+    borderWidth: 1,
+    borderColor: "#ffffff",
     zIndex: 0,
     marginTop: -160,
   },

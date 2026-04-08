@@ -1,4 +1,5 @@
 import { View, Text, ActivityIndicator, Alert, Pressable, StyleSheet } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { useCallback, useState } from "react";
 import { supabase } from "../../../lib/supabase";
 import { router, useFocusEffect } from "expo-router";
@@ -180,8 +181,9 @@ export default function Profile() {
   if (loading) return <ActivityIndicator style={{ flex: 1 }} />;
 
   return (
-    <View style={styles.page}>
+    <LinearGradient colors={["#fb7185", "#fff1f2"]} style={styles.page}>
       <View style={styles.heroBackground} />
+      <View style={styles.bottomGlow} />
       <View style={styles.card}>
         <View style={styles.heroHeader}>
           <View style={styles.avatar}>
@@ -270,26 +272,51 @@ export default function Profile() {
           </Pressable>
         </View>
       </View>
-    </View>
+      <View style={styles.secondaryCard}>
+        <Text style={styles.sectionTitle}>Quick actions</Text>
+        <Pressable
+          style={({ pressed }) => [
+            styles.button,
+            styles.secondaryButton,
+            pressed && styles.buttonPressed,
+          ]}
+          onPress={() => router.push("/settings")}
+        >
+          <Text style={styles.secondaryButtonText}>Settings</Text>
+        </Pressable>
+      </View>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   page: {
     flex: 1,
-    backgroundColor: "#fdf2f8",
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent: "flex-start",
     padding: 20,
+    paddingTop: 56,
+    paddingBottom: 40,
   },
   heroBackground: {
     position: "absolute",
     top: 0,
     left: 0,
     right: 0,
+    height: 260,
+    backgroundColor: "#f472b6",
+    opacity: 0.2,
+  },
+  bottomGlow: {
+    position: "absolute",
+    left: -60,
+    right: -60,
+    bottom: -40,
     height: 220,
-    backgroundColor: "#7f1d1d",
-    opacity: 0.45,
+    backgroundColor: "#fda4af",
+    opacity: 0.18,
+    borderTopLeftRadius: 220,
+    borderTopRightRadius: 220,
   },
   card: {
     width: "100%",
@@ -298,12 +325,28 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 20,
     borderWidth: 1,
-    borderColor: "rgba(148, 163, 184, 0.25)",
-    shadowColor: "#111827",
+    borderColor: "rgba(15, 23, 42, 0.08)",
+    shadowColor: "#0f172a",
     shadowOpacity: 0.12,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 10 },
     elevation: 4,
+    marginTop: 16,
+  },
+  secondaryCard: {
+    width: "100%",
+    maxWidth: 420,
+    marginTop: 14,
+    padding: 18,
+    borderRadius: 18,
+    backgroundColor: "rgba(255, 255, 255, 0.88)",
+    borderWidth: 1,
+    borderColor: "rgba(15, 23, 42, 0.08)",
+    shadowColor: "#0f172a",
+    shadowOpacity: 0.1,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 3,
   },
   heroHeader: {
     flexDirection: "row",
@@ -317,7 +360,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: "#f1f5f9",
+    backgroundColor: "#fee2e2",
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
@@ -334,7 +377,7 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: "700",
     marginBottom: 4,
-    color: "#1f2937",
+    color: "#111827",
   },
   email: {
     fontSize: 14,
@@ -361,16 +404,24 @@ const styles = StyleSheet.create({
     color: "#6b7280",
     marginBottom: 8,
   },
+  sectionTitle: {
+    fontSize: 14,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    color: "#6b7280",
+    marginBottom: 8,
+    fontWeight: "600",
+  },
   chip: {
     alignSelf: "flex-start",
-    backgroundColor: "#f1f5f9",
+    backgroundColor: "#e2e8f0",
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 999,
   },
   chipText: {
     fontSize: 13,
-    color: "#334155",
+    color: "#1f2937",
   },
   statsRow: {
     flexDirection: "row",
@@ -386,7 +437,7 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 20,
     fontWeight: "700",
-    color: "#111827",
+    color: "#0f172a",
   },
   statLabel: {
     fontSize: 12,
@@ -402,7 +453,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   primaryButton: {
-    backgroundColor: "#be123c",
+    backgroundColor: "#2563eb",
   },
   primaryButtonText: {
     color: "#fff",
