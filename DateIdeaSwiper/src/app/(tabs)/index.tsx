@@ -1,24 +1,33 @@
-import { View, ActivityIndicator, Text, StyleSheet, Dimensions } from "react-native";
-import { useCallback, useEffect, useState } from "react";
-import { router, useFocusEffect } from "expo-router";
-import Swiper from "react-native-deck-swiper";
-import { useFonts, DancingScript_700Bold } from "@expo-google-fonts/dancing-script";
+import { DancingScript_700Bold, useFonts } from "@expo-google-fonts/dancing-script";
+import { Pacifico_400Regular } from "@expo-google-fonts/pacifico";
 import { LinearGradient } from "expo-linear-gradient";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  Animated,
+  Dimensions,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import Swiper from "react-native-deck-swiper";
 
 import DateCard from "../../components/DateCard";
-import { useLikes } from "../../store/LikesContext";
 import { supabase } from "../../lib/supabase";
+import { useLikes } from "../../store/LikesContext";
 
-import { saveSwipe } from "../../services/saveSwipe";
 import { checkMatch } from "../../services/checkMatch";
 import { getCoupleId } from "../../services/getCoupleId";
-import { DateIdea } from "../../types/date";
 import { getDateIdeas } from "../../services/getDateIdeas";
+import { saveSwipe } from "../../services/saveSwipe";
+import { DateIdea } from "../../types/date";
 
 export default function Home() {
 
   const [fontsLoaded] = useFonts({
     DancingScript_700Bold,
+    Pacifico_400Regular,
   });
 
   const { addLike } = useLikes();
@@ -26,6 +35,8 @@ export default function Home() {
   const [seenIds, setSeenIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [datesLoading, setDatesLoading] = useState(true);
+  const [swipeFeedback, setSwipeFeedback] = useState<"like" | "pass" | null>(null);
+  const feedbackAnim = useRef(new Animated.Value(0)).current;
 
   // 🔐 auth guard
   useFocusEffect(
@@ -52,6 +63,26 @@ export default function Home() {
   );
 
   
+
+  const triggerSwipeFeedback = useCallback((type: "like" | "pass") => {
+    setSwipeFeedback(type);
+    feedbackAnim.setValue(0);
+    Animated.sequence([
+      Animated.timing(feedbackAnim, {
+        toValue: 1,
+        duration: 160,
+        useNativeDriver: true,
+      }),
+      Animated.delay(220),
+      Animated.timing(feedbackAnim, {
+        toValue: 0,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+    ]).start(({ finished }) => {
+      if (finished) setSwipeFeedback(null);
+    });
+  }, [feedbackAnim]);
 
   async function handleSwipe(date: DateIdea, liked: boolean) {
     if (!date) return;
@@ -150,12 +181,15 @@ export default function Home() {
     >
       <View style={styles.header}>
         <View style={styles.headerCard}>
+          <View style={styles.headerLabel}>
+            <Text style={styles.headerLabelText}>Today’s picks</Text>
+          </View>
           <View style={styles.headerTitleRow}>
             <Text style={styles.headerHeart}>❤</Text>
-            <Text style={styles.title}>Find your next date</Text>
+            <Text style={styles.title}>What will be your next date?</Text>
           </View>
           <Text style={styles.subtitle}>
-            Swipe right to like, left to pass
+            Fresh ideas tailored for easy, fun planning.
           </Text>
         </View>
       </View>
@@ -169,11 +203,50 @@ export default function Home() {
         />
         <Text style={[styles.sideHintText, styles.sideHintTextLeft]}>PASS</Text>
         <Text style={[styles.sideHintText, styles.sideHintTextRight]}>LIKE</Text>
+        {swipeFeedback ? (
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.swipeFeedback,
+              swipeFeedback === "like"
+                ? styles.swipeFeedbackLike
+                : styles.swipeFeedbackPass,
+              {
+                opacity: feedbackAnim,
+                transform: [
+                  {
+                    scale: feedbackAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.92, 1],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.swipeFeedbackText,
+                swipeFeedback === "like"
+                  ? styles.swipeFeedbackTextLike
+                  : styles.swipeFeedbackTextPass,
+              ]}
+            >
+              {swipeFeedback === "like" ? "✔" : "✕"}
+            </Text>
+          </Animated.View>
+        ) : null}
         <Swiper
           cards={filteredDates}
           renderCard={(card) => <DateCard item={card} />}
-          onSwipedRight={(i) => handleSwipe(filteredDates[i], true)}
-          onSwipedLeft={(i) => handleSwipe(filteredDates[i], false)}
+          onSwipedRight={(i) => {
+            triggerSwipeFeedback("like");
+            handleSwipe(filteredDates[i], true);
+          }}
+          onSwipedLeft={(i) => {
+            triggerSwipeFeedback("pass");
+            handleSwipe(filteredDates[i], false);
+          }}
           stackSize={3}
           backgroundColor="transparent"
           cardVerticalMargin={12}
@@ -209,18 +282,34 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   headerCard: {
-    backgroundColor: "rgba(255, 255, 255, 0.85)",
-    paddingVertical: 12,
-    paddingHorizontal: 18,
-    borderRadius: 16,
+    backgroundColor: "rgba(255, 255, 255, 0.92)",
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: "rgba(244, 63, 94, 0.2)",
+    borderColor: "rgba(244, 63, 94, 0.18)",
     shadowColor: "#7f1d1d",
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 2,
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 3,
     alignItems: "center",
+    gap: 6,
+  },
+  headerLabel: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: "rgba(244, 63, 94, 0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(244, 63, 94, 0.16)",
+  },
+  headerLabelText: {
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.8,
+    color: "#be123c",
+    textTransform: "uppercase",
   },
   headerTitleRow: {
     flexDirection: "row",
@@ -234,15 +323,14 @@ const styles = StyleSheet.create({
     color: "#e11d48",
   },
   title: {
-    fontSize: 22,
+    fontSize: 20,
     color: "#7f1d1d",
-    letterSpacing: 0.2,
-    fontFamily: "DancingScript_700Bold",
+    letterSpacing: 0.3,
+    fontFamily: "Pacifico_400Regular",
   },
   subtitle: {
     fontSize: 13,
     color: "#6b7280",
-    marginTop: 4,
     textAlign: "center",
     fontWeight: "500",
     letterSpacing: 0.2,
@@ -260,6 +348,7 @@ const styles = StyleSheet.create({
     width: CARD_WIDTH,
     alignSelf: "center",
     marginLeft: (Dimensions.get("window").width - CARD_WIDTH) / 2,
+    marginBottom: 28,
   },
   gradientHint: {
     position: "absolute",
@@ -294,6 +383,35 @@ const styles = StyleSheet.create({
     right: 18,
     marginTop: -20,
     zIndex: 1,
+  },
+  swipeFeedback: {
+    position: "absolute",
+    top: 22,
+    alignSelf: "center",
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    borderRadius: 999,
+    zIndex: 2,
+    borderWidth: 1,
+    backgroundColor: "rgba(255, 255, 255, 0.95)",
+  },
+  swipeFeedbackLike: {
+    borderColor: "rgba(34, 197, 94, 0.35)",
+  },
+  swipeFeedbackPass: {
+    borderColor: "rgba(239, 68, 68, 0.35)",
+  },
+  swipeFeedbackText: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#0f172a",
+    letterSpacing: 1,
+  },
+  swipeFeedbackTextLike: {
+    color: "#16a34a",
+  },
+  swipeFeedbackTextPass: {
+    color: "#dc2626",
   },
   emptyState: {
     flex: 1,

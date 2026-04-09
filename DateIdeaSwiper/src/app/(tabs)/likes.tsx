@@ -17,14 +17,18 @@ import { StatusBar } from "expo-status-bar";
 import { useCallback, useMemo, useState, useRef, useEffect } from "react";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect } from "expo-router";
+import Svg, { Path } from "react-native-svg";
 import { supabase } from "../../lib/supabase";
 import { getDateIdeas } from "../../services/getDateIdeas";
 import type { DateIdea } from "../../types/date";
+import { useLikes } from "../../store/LikesContext";
 
 export default function LikesScreen() {
   const [heroHeight, setHeroHeight] = useState(0);
   const [likes, setLikes] = useState<DateIdea[]>([]);
   const [loading, setLoading] = useState(true);
+  const [warningMessage, setWarningMessage] = useState<string | null>(null);
+  const { likes: liveLikes } = useLikes();
   const [activeFolder, setActiveFolder] = useState<{
     title: string;
     data: DateIdea[];
@@ -96,11 +100,25 @@ export default function LikesScreen() {
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
   }, []);
 
+  const mergeUniqueLikes = useCallback((items: DateIdea[]) => {
+    const map = new Map<string, DateIdea>();
+    items.forEach((item) => {
+      if (!item) return;
+      map.set(String(item.id), item);
+    });
+    return Array.from(map.values());
+  }, []);
+
   useEffect(() => {
     if (activeFolder) {
       modalTranslateY.setValue(0);
     }
   }, [activeFolder, modalTranslateY]);
+
+  useEffect(() => {
+    if (liveLikes.length === 0) return;
+    setLikes((prev) => mergeUniqueLikes([...prev, ...liveLikes]));
+  }, [liveLikes, mergeUniqueLikes]);
 
   const closeModal = useCallback(() => {
     setActiveFolder(null);
@@ -139,6 +157,7 @@ export default function LikesScreen() {
 
   const loadLikes = useCallback(async () => {
     try {
+      setWarningMessage(null);
       const { data: userData, error: userError } = await supabase.auth.getUser();
       if (userError) throw userError;
 
@@ -164,21 +183,67 @@ export default function LikesScreen() {
 
       if (swipeError) throw swipeError;
 
-      const allLikedDates = dateIdeas.filter(d =>
-        swipeData.some(row => String(row.date_id) === String(d.id))
+      const swipeIds = (swipeData ?? []).map(row => String(row.date_id));
+      let baseDates = dateIdeas;
+
+      if (
+        swipeIds.length > 0 &&
+        (baseDates.length === 0 ||
+          swipeIds.some(
+            id => !baseDates.find(d => String(d.id) === id)
+          ))
+      ) {
+        const { data: likedDateRows, error: likedDatesError } = await supabase
+          .from("dates")
+          .select("id, title, category, vibe, description, image")
+          .in("id", swipeIds);
+
+        if (!likedDatesError && likedDateRows) {
+          baseDates = likedDateRows.map((row) => {
+            const rawVibes = (row as { vibe?: unknown }).vibe;
+            const vibes =
+              Array.isArray(rawVibes)
+                ? rawVibes.map((v) => String(v).trim()).filter(Boolean)
+                : typeof rawVibes === "string"
+                  ? rawVibes
+                      .split(",")
+                      .map((v) => v.trim())
+                      .filter(Boolean)
+                  : [];
+
+            return {
+              id: String(row.id),
+              title: row.title,
+              category: row.category,
+              vibes,
+              description: row.description,
+              image: row.image,
+            } as DateIdea;
+          });
+        }
+      }
+
+      const allLikedDates = baseDates.filter(d =>
+        swipeIds.includes(String(d.id))
       );
+      const mergedLikedDates = mergeUniqueLikes([...allLikedDates, ...liveLikes]);
 
       // 2️⃣ check if user is linked to a couple
       const { data: couple, error: coupleError } = await supabase
         .from("couples")
         .select("*")
         .or(`user1.eq.${user.id},user2.eq.${user.id}`)
-        .single();
+        .maybeSingle();
 
-      if (coupleError) throw coupleError;
+      if (coupleError) {
+        console.log(coupleError);
+        setWarningMessage("Likes may be incomplete right now. Please try again.");
+        setLikes(mergedLikedDates);
+        return;
+      }
 
       if (!couple) {
-        setLikes(allLikedDates);
+        setLikes(mergedLikedDates);
         return;
       }
 
@@ -186,7 +251,7 @@ export default function LikesScreen() {
         couple.user1 === user.id ? couple.user2 : couple.user1;
 
       if (!partnerId) {
-        setLikes(allLikedDates);
+        setLikes(mergedLikedDates);
         return;
       }
 
@@ -196,7 +261,12 @@ export default function LikesScreen() {
         .select("date_id")
         .eq("couple_id", couple.id);
 
-      if (matchError) throw matchError;
+      if (matchError) {
+        console.log(matchError);
+        setWarningMessage("Matches are unavailable right now. Showing likes only.");
+        setLikes(mergedLikedDates);
+        return;
+      }
 
       let matchedIds: string[] = [];
 
@@ -232,18 +302,19 @@ export default function LikesScreen() {
       }
 
       // 4️⃣ remove matched ones while linked
-      const likedDates = allLikedDates.filter(
+      const likedDates = mergedLikedDates.filter(
         d => !matchedIds.includes(String(d.id))
       );
 
       setLikes(likedDates);
     } catch (error) {
       console.log(error);
-      setLikes([]);
+      setWarningMessage("Could not refresh likes. Pull to retry.");
+      setLikes(mergeUniqueLikes(liveLikes));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [liveLikes, mergeUniqueLikes]);
 
   useFocusEffect(
     useCallback(() => {
@@ -278,9 +349,28 @@ export default function LikesScreen() {
     );
 
   return (
-    <SafeAreaView style={styles.screen}>
-      <StatusBar style="dark" backgroundColor="#ffffff" />
-      <ScrollView contentContainerStyle={[styles.page, { paddingTop: topInset }]}>
+    <LinearGradient colors={["#fb7185", "#fff1f2"]} style={styles.screen}>
+      <SafeAreaView style={styles.safeArea}>
+        <LinearGradient
+          colors={["rgba(251, 113, 133, 0)", "rgba(251, 113, 133, 0.26)"]}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={styles.bottomGlow}
+        />
+        <View pointerEvents="none" style={[styles.bigHeart, styles.bigHeartOffset]}>
+          <Svg
+            width={styles.bigHeartIcon.width}
+            height={styles.bigHeartIcon.height}
+            viewBox="0 0 24 24"
+          >
+            <Path
+              d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41 0.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
+              fill={styles.bigHeartIcon.color}
+            />
+          </Svg>
+        </View>
+        <StatusBar style="dark" backgroundColor="#ffffff" />
+        <ScrollView contentContainerStyle={[styles.page, { paddingTop: topInset }]}>
         <View style={styles.heroWrap}>
           <LinearGradient
             colors={["#fda4af", "rgba(253, 164, 175, 0)"]}
@@ -304,6 +394,11 @@ export default function LikesScreen() {
             </Text>
           </View>
         </View>
+      {warningMessage ? (
+        <View style={styles.warningBanner}>
+          <Text style={styles.warningText}>{warningMessage}</Text>
+        </View>
+      ) : null}
       {folders.length === 0 ? (
         <Text style={styles.emptyText}>Like some dates to see them here!</Text>
       ) : (
@@ -463,15 +558,42 @@ export default function LikesScreen() {
           </Animated.View>
         </View>
       </Modal>
-      </ScrollView>
-    </SafeAreaView>
+        </ScrollView>
+      </SafeAreaView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#fff1f2",
+  },
+  safeArea: {
+    flex: 1,
+  },
+  bottomGlow: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 190,
+  },
+  bigHeart: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  bigHeartOffset: {
+    marginTop: 80,
+  },
+  bigHeartIcon: {
+    width: 380,
+    height: 380,
+    color: "rgba(255, 255, 255, 0.65)",
   },
   page: {
     padding: 20,
@@ -697,5 +819,20 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 50,
     color: "#6b7280",
+  },
+  warningBanner: {
+    backgroundColor: "#fef2f2",
+    borderColor: "#fecaca",
+    borderWidth: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  warningText: {
+    color: "#b91c1c",
+    fontSize: 12,
+    fontWeight: "600",
+    textAlign: "center",
   },
 });

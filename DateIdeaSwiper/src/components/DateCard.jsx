@@ -27,9 +27,9 @@ export default function DateCard({ item }) {
   );
 }
 
-const CARD_HEIGHT = Math.round(Dimensions.get("window").height * 0.72);
+const CARD_HEIGHT = Math.round(Dimensions.get("window").height * 0.64);
 const CARD_WIDTH = Math.round(Dimensions.get("window").width * 0.88);
-const IMAGE_HEIGHT = Math.round(CARD_HEIGHT * 0.68);
+const IMAGE_HEIGHT = Math.round(CARD_HEIGHT * 0.62);
 
 const styles = StyleSheet.create({
   card: {
