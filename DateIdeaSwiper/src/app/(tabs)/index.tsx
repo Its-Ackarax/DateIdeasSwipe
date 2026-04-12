@@ -7,10 +7,13 @@ import {
   ActivityIndicator,
   Animated,
   Dimensions,
+  Modal,
+  Pressable,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import Swiper from "react-native-deck-swiper";
 
 import DateCard from "../../components/DateCard";
@@ -35,8 +38,17 @@ export default function Home() {
   const [seenIds, setSeenIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [datesLoading, setDatesLoading] = useState(true);
+  const [swiperKey, setSwiperKey] = useState(0);
   const [swipeFeedback, setSwipeFeedback] = useState<"like" | "pass" | null>(null);
+  const [matchVisible, setMatchVisible] = useState(false);
+  const [matchToastDisabled, setMatchToastDisabled] = useState(false);
   const feedbackAnim = useRef(new Animated.Value(0)).current;
+  const heartAnimations = useRef(
+    [0, 1, 2].map(() => ({
+      translateY: new Animated.Value(0),
+      opacity: new Animated.Value(0),
+    }))
+  ).current;
 
   // 🔐 auth guard
   useFocusEffect(
@@ -84,11 +96,73 @@ export default function Home() {
     });
   }, [feedbackAnim]);
 
+  const loadMatchPreference = useCallback(async () => {
+    try {
+      const stored = await AsyncStorage.getItem("matchModalDisabled");
+      setMatchToastDisabled(stored === "true");
+    } catch (error) {
+      console.log(error);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadMatchPreference();
+  }, [loadMatchPreference]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadMatchPreference();
+    }, [loadMatchPreference])
+  );
+
+  const openMatchModal = useCallback(() => {
+    if (matchToastDisabled) return;
+    setMatchVisible(true);
+  }, [matchToastDisabled]);
+
+  const triggerMatchHearts = useCallback(() => {
+    heartAnimations.forEach((anim) => {
+      anim.translateY.setValue(0);
+      anim.opacity.setValue(0);
+    });
+
+    Animated.stagger(
+      120,
+      heartAnimations.map((anim) =>
+        Animated.parallel([
+          Animated.timing(anim.translateY, {
+            toValue: -120,
+            duration: 900,
+            useNativeDriver: true,
+          }),
+          Animated.sequence([
+            Animated.timing(anim.opacity, {
+              toValue: 1,
+              duration: 140,
+              useNativeDriver: true,
+            }),
+            Animated.timing(anim.opacity, {
+              toValue: 0,
+              duration: 700,
+              useNativeDriver: true,
+            }),
+          ]),
+        ])
+      )
+    ).start();
+  }, [heartAnimations]);
+
   async function handleSwipe(date: DateIdea, liked: boolean) {
     if (!date) return;
+    triggerSwipeFeedback(liked ? "like" : "pass");
     const { data } = await supabase.auth.getUser();
     const user = data.user;
     if (!user) return;
+
+    setSeenIds((prev) => {
+      const id = String(date.id);
+      return prev.includes(id) ? prev : [...prev, id];
+    });
 
     await saveSwipe(user.id, date.id, liked);
 
@@ -101,7 +175,13 @@ export default function Home() {
       const matched = await checkMatch(coupleId, date.id);
 
       if (matched) {
-        alert("It's a match! 🎉");
+        triggerMatchHearts();
+        if (!matchToastDisabled) {
+          openMatchModal();
+          setTimeout(() => {
+            setSwiperKey((prev) => prev + 1);
+          }, 0);
+        }
       }
     }
   }
@@ -237,14 +317,13 @@ export default function Home() {
           </Animated.View>
         ) : null}
         <Swiper
+          key={`swiper-${swiperKey}-${filteredDates.length}`}
           cards={filteredDates}
           renderCard={(card) => <DateCard item={card} />}
           onSwipedRight={(i) => {
-            triggerSwipeFeedback("like");
             handleSwipe(filteredDates[i], true);
           }}
           onSwipedLeft={(i) => {
-            triggerSwipeFeedback("pass");
             handleSwipe(filteredDates[i], false);
           }}
           stackSize={3}
@@ -254,6 +333,71 @@ export default function Home() {
           cardStyle={styles.cardStyle}
         />
       </View>
+      <View pointerEvents="none" style={styles.matchHeartsWrap}>
+        {heartAnimations.map((anim, index) => (
+          <Animated.Text
+            key={`match-heart-${index}`}
+            style={[
+              styles.matchHeart,
+              styles[`matchHeart${index}` as keyof typeof styles],
+              {
+                opacity: anim.opacity,
+                transform: [{ translateY: anim.translateY }],
+              },
+            ]}
+          >
+            ✨
+          </Animated.Text>
+        ))}
+      </View>
+      <Modal
+        visible={matchVisible}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setMatchVisible(false)}
+      >
+        <View style={styles.matchBackdrop}>
+          <Pressable
+            style={styles.matchBackdropPress}
+            onPress={() => setMatchVisible(false)}
+          />
+          <View style={styles.matchCard}>
+            <View style={styles.matchIconWrap}>
+              <Text style={styles.matchIcon}>❤</Text>
+            </View>
+            <Text style={styles.matchTitle}>It’s a match!</Text>
+            <Text style={styles.matchSubtitle}>
+              You both loved this idea. Check your matches to plan it together.
+            </Text>
+            <View style={styles.matchActions}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.matchButtonSecondary,
+                  pressed && styles.matchButtonPressed,
+                ]}
+                onPress={() => {
+                  setMatchToastDisabled(true);
+                  AsyncStorage.setItem("matchModalDisabled", "true");
+                  setMatchVisible(false);
+                }}
+              >
+                <Text style={styles.matchButtonSecondaryText}>
+                  Don’t show again
+                </Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.matchButton,
+                  pressed && styles.matchButtonPressed,
+                ]}
+                onPress={() => setMatchVisible(false)}
+              >
+                <Text style={styles.matchButtonText}>Dismiss</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </LinearGradient>
   );
 }
@@ -412,6 +556,109 @@ const styles = StyleSheet.create({
   },
   swipeFeedbackTextPass: {
     color: "#dc2626",
+  },
+  matchBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.5)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+  },
+  matchBackdropPress: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  matchCard: {
+    width: "100%",
+    maxWidth: 360,
+    backgroundColor: "rgba(255, 255, 255, 0.95)",
+    borderRadius: 20,
+    padding: 20,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "rgba(244, 63, 94, 0.2)",
+    shadowColor: "#7f1d1d",
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 4,
+  },
+  matchIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(244, 63, 94, 0.12)",
+    marginBottom: 12,
+  },
+  matchIcon: {
+    fontSize: 26,
+    color: "#e11d48",
+  },
+  matchTitle: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: "#7f1d1d",
+    marginBottom: 6,
+  },
+  matchSubtitle: {
+    fontSize: 14,
+    color: "#6b7280",
+    textAlign: "center",
+    marginBottom: 16,
+  },
+  matchActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  matchButton: {
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: "#e11d48",
+  },
+  matchButtonText: {
+    color: "#ffffff",
+    fontWeight: "600",
+  },
+  matchButtonSecondary: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: "#f1f5f9",
+    borderWidth: 1,
+    borderColor: "#94a3b8",
+  },
+  matchButtonSecondaryText: {
+    color: "#0f172a",
+    fontWeight: "600",
+  },
+  matchButtonPressed: {
+    opacity: 0.8,
+  },
+  matchHeartsWrap: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: -130,
+    height: 180,
+    zIndex: 50,
+    elevation: 50,
+  },
+  matchHeart: {
+    position: "absolute",
+    fontSize: 30,
+    color: "rgba(225, 29, 72, 0.8)",
+  },
+  matchHeart0: {
+    left: "28%",
+  },
+  matchHeart1: {
+    left: "50%",
+  },
+  matchHeart2: {
+    left: "70%",
   },
   emptyState: {
     flex: 1,

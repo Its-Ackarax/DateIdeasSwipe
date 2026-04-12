@@ -1,4 +1,5 @@
 import { View, Text, ActivityIndicator, Alert, Pressable, StyleSheet } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "expo-linear-gradient";
 import { useCallback, useState } from "react";
 import { supabase } from "../../../lib/supabase";
@@ -94,6 +95,10 @@ export default function Profile() {
     const user = userData.user;
     if (!user) return;
 
+    setLikesCount(0);
+    setMatchesCount(0);
+    await AsyncStorage.removeItem("matchModalDisabled");
+
     const { data: couple } = await supabase
       .from("couples")
       .select("*")
@@ -142,6 +147,7 @@ export default function Profile() {
     }
 
     alert("Swipes reset. You can start again.");
+    loadProfile();
   }
 
   async function logout() {
@@ -223,12 +229,12 @@ export default function Profile() {
               <Pressable
                 style={({ pressed }) => [
                   styles.button,
-                  styles.secondaryButton,
+                  styles.dangerButton,
                   pressed && styles.buttonPressed,
                 ]}
                 onPress={confirmUnlink}
               >
-                <Text style={styles.secondaryButtonText}>Unlink</Text>
+                <Text style={styles.dangerButtonText}>Unlink</Text>
               </Pressable>
             )}
           </View>
@@ -454,6 +460,8 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     backgroundColor: "#2563eb",
+    borderWidth: 1,
+    borderColor: "#1d4ed8",
   },
   primaryButtonText: {
     color: "#fff",
@@ -461,6 +469,8 @@ const styles = StyleSheet.create({
   },
   secondaryButton: {
     backgroundColor: "#e2e8f0",
+    borderWidth: 1,
+    borderColor: "#cbd5f5",
   },
   secondaryButtonText: {
     color: "#1f2937",
@@ -468,6 +478,8 @@ const styles = StyleSheet.create({
   },
   dangerButton: {
     backgroundColor: "#fee2e2",
+    borderWidth: 1,
+    borderColor: "#fca5a5",
   },
   dangerButtonText: {
     color: "#991b1b",

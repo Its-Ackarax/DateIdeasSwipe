@@ -18,6 +18,7 @@ import { useCallback, useMemo, useState, useRef, useEffect } from "react";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect } from "expo-router";
 import Svg, { Path } from "react-native-svg";
+import DateCard from "../../components/DateCard";
 import { supabase } from "../../lib/supabase";
 import { getDateIdeas } from "../../services/getDateIdeas";
 import type { DateIdea } from "../../types/date";
@@ -28,6 +29,8 @@ export default function LikesScreen() {
   const [likes, setLikes] = useState<DateIdea[]>([]);
   const [loading, setLoading] = useState(true);
   const [warningMessage, setWarningMessage] = useState<string | null>(null);
+  const [selectedIdea, setSelectedIdea] = useState<DateIdea | null>(null);
+  const previewTranslate = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
   const { likes: liveLikes } = useLikes();
   const [activeFolder, setActiveFolder] = useState<{
     title: string;
@@ -111,9 +114,16 @@ export default function LikesScreen() {
 
   useEffect(() => {
     if (activeFolder) {
+      modalTranslateY.stopAnimation();
       modalTranslateY.setValue(0);
     }
   }, [activeFolder, modalTranslateY]);
+
+  useEffect(() => {
+    if (selectedIdea) {
+      previewTranslate.setValue({ x: 0, y: 0 });
+    }
+  }, [selectedIdea, previewTranslate]);
 
   useEffect(() => {
     if (liveLikes.length === 0) return;
@@ -121,38 +131,61 @@ export default function LikesScreen() {
   }, [liveLikes, mergeUniqueLikes]);
 
   const closeModal = useCallback(() => {
+    modalTranslateY.stopAnimation();
     setActiveFolder(null);
+    setTimeout(() => {
+      modalTranslateY.setValue(0);
+    }, 0);
+  }, [modalTranslateY]);
+
+  const closePreview = useCallback(() => {
+    setSelectedIdea(null);
   }, []);
 
   const modalPanResponder = useMemo(
     () =>
       PanResponder.create({
+        onStartShouldSetPanResponder: () => false,
+        onStartShouldSetPanResponderCapture: () => false,
+        onMoveShouldSetPanResponder: () => false,
+        onMoveShouldSetPanResponderCapture: () => false,
+        onPanResponderMove: () => {},
+        onPanResponderRelease: () => {},
+      }),
+    []
+  );
+
+  const previewPanResponder = useMemo(
+    () =>
+      PanResponder.create({
         onStartShouldSetPanResponder: () => true,
         onMoveShouldSetPanResponder: (_, gesture) =>
-          gesture.dy > 4 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
+          Math.abs(gesture.dx) > 4 || Math.abs(gesture.dy) > 4,
         onMoveShouldSetPanResponderCapture: (_, gesture) =>
-          gesture.dy > 4 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
+          Math.abs(gesture.dx) > 4 || Math.abs(gesture.dy) > 4,
         onPanResponderMove: (_, gesture) => {
-          if (gesture.dy > 0) {
-            modalTranslateY.setValue(gesture.dy);
-          }
+          previewTranslate.setValue({ x: gesture.dx, y: gesture.dy });
         },
         onPanResponderRelease: (_, gesture) => {
-          if (gesture.dy > 120) {
-            Animated.timing(modalTranslateY, {
-              toValue: 260,
+          const distance = Math.sqrt(
+            Math.pow(gesture.dx, 2) + Math.pow(gesture.dy, 2)
+          );
+
+          if (distance > 140) {
+            Animated.timing(previewTranslate, {
+              toValue: { x: gesture.dx * 2, y: gesture.dy * 2 },
               duration: 180,
               useNativeDriver: true,
-            }).start(closeModal);
+            }).start(closePreview);
           } else {
-            Animated.spring(modalTranslateY, {
-              toValue: 0,
+            Animated.spring(previewTranslate, {
+              toValue: { x: 0, y: 0 },
               useNativeDriver: true,
             }).start();
           }
         },
       }),
-    [closeModal, modalTranslateY]
+    [closePreview, previewTranslate]
   );
 
   const loadLikes = useCallback(async () => {
@@ -372,22 +405,13 @@ export default function LikesScreen() {
         <StatusBar style="dark" backgroundColor="#ffffff" />
         <ScrollView contentContainerStyle={[styles.page, { paddingTop: topInset }]}>
         <View style={styles.heroWrap}>
-          <LinearGradient
-            colors={["#fda4af", "rgba(253, 164, 175, 0)"]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
-            style={[
-              styles.topGlow,
-              { height: heroHeight > 0 ? heroHeight + 19 : undefined },
-            ]}
-          />
           <View
             style={styles.heroCard}
             onLayout={(event) => setHeroHeight(event.nativeEvent.layout.height)}
           >
             <View style={styles.heroTitleRow}>
               <Text style={styles.heroEmoji}>❤</Text>
-              <Text style={styles.heroTitle}>Your likes</Text>
+              <Text style={styles.heroTitle}>Likes currently not a match</Text>
             </View>
             <Text style={styles.heroSubtitle}>
               Date ideas grouped into folders
@@ -468,7 +492,7 @@ export default function LikesScreen() {
               { transform: [{ translateY: modalTranslateY }] },
             ]}
           >
-            <View style={styles.modalDragZone} {...modalPanResponder.panHandlers}>
+            <View style={styles.modalDragZone}>
               <View style={styles.modalHandle} />
               <View style={styles.modalHeader} pointerEvents="box-none">
                 <View style={styles.modalTitleWrap}>
@@ -479,7 +503,7 @@ export default function LikesScreen() {
                     {activeFolder?.title ?? ""}
                   </Text>
                 </View>
-                <Pressable onPress={closeModal}>
+                <Pressable onPress={closeModal} hitSlop={17}>
                   <Text style={styles.modalClose}>✕</Text>
                 </Pressable>
               </View>
@@ -521,8 +545,10 @@ export default function LikesScreen() {
               <FlatList
                 data={activeFolder?.data ?? []}
                 keyExtractor={(item) => item.id}
+                keyboardShouldPersistTaps="handled"
                 renderItem={({ item }) => (
-                  <View
+                  <Pressable
+                    onPress={() => setSelectedIdea(item)}
                     style={[
                       styles.modalItem,
                       {
@@ -541,7 +567,7 @@ export default function LikesScreen() {
                         </Text>
                       </View>
                     ) : null}
-                  </View>
+                  </Pressable>
                 )}
                 ListEmptyComponent={
                   <Text style={styles.modalEmpty}>No likes yet.</Text>
@@ -555,6 +581,28 @@ export default function LikesScreen() {
                 showsVerticalScrollIndicator
               />
             </View>
+          </Animated.View>
+        </View>
+      </Modal>
+      <Modal
+        visible={Boolean(selectedIdea)}
+        animationType="fade"
+        transparent
+        onRequestClose={closePreview}
+      >
+        <View style={styles.previewBackdrop}>
+          <Pressable
+            style={styles.previewBackdropPress}
+            onPress={closePreview}
+          />
+          <Animated.View
+            style={[
+              styles.previewCard,
+              { transform: previewTranslate.getTranslateTransform() },
+            ]}
+            {...previewPanResponder.panHandlers}
+          >
+            {selectedIdea ? <DateCard item={selectedIdea} /> : null}
           </Animated.View>
         </View>
       </Modal>
@@ -636,7 +684,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
   },
   heroTitle: {
-    fontSize: 22,
+    fontSize: 21,
     fontWeight: "700",
     color: "#7f1d1d",
   },
@@ -802,6 +850,21 @@ const styles = StyleSheet.create({
   modalDescBullet: {
     color: "#cbd5f5",
     marginRight: 6,
+  },
+  previewBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.5)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 20,
+  },
+  previewBackdropPress: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  previewCard: {
+    width: "100%",
+    maxWidth: 420,
+    alignItems: "center",
   },
   modalItemDesc: {
     fontSize: 13,
