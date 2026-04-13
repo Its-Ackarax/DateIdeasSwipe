@@ -1,19 +1,20 @@
 import { DancingScript_700Bold, useFonts } from "@expo-google-fonts/dancing-script";
 import { Pacifico_400Regular } from "@expo-google-fonts/pacifico";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useFocusEffect } from "expo-router";
+import BrandStatusBar from "../../components/BrandStatusBar";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
-  Animated,
-  Dimensions,
-  Modal,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
+    ActivityIndicator,
+    Animated,
+    Dimensions,
+    Modal,
+    Pressable,
+    StyleSheet,
+    Text,
+    View,
 } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import Swiper from "react-native-deck-swiper";
 
 import DateCard from "../../components/DateCard";
@@ -259,6 +260,7 @@ export default function Home() {
       locations={[0, 0.35, 1]}
       style={styles.page}
     >
+      <BrandStatusBar />
       <View style={styles.header}>
         <View style={styles.headerCard}>
           <View style={styles.headerLabel}>

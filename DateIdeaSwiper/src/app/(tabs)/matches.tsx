@@ -1,18 +1,23 @@
 import { LinearGradient } from "expo-linear-gradient";
-import { useFocusEffect } from "expo-router";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-    ActivityIndicator,
-    Animated,
-    Dimensions,
-    Image,
-    Platform,
-    StatusBar as RNStatusBar,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View,
+  ActivityIndicator,
+  Animated,
+  Dimensions,
+  Image,
+  Modal,
+  PanResponder,
+  Platform,
+  Pressable,
+  StatusBar as RNStatusBar,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
+import BrandStatusBar from "../../components/BrandStatusBar";
+import DateCard from "../../components/DateCard";
 import { supabase } from "../../lib/supabase";
 import { getDateIdeas } from "../../services/getDateIdeas";
 import type { DateIdea } from "../../types/date";
@@ -22,12 +27,57 @@ export default function Matches() {
   const [hasCouple, setHasCouple] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   const [dates, setDates] = useState<DateIdea[]>([]);
+  const [selectedIdea, setSelectedIdea] = useState<DateIdea | null>(null);
+  const previewTranslate = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
   const indicatorOpacity = useRef<Record<string, Animated.Value>>({}).current;
   const leftIndicatorOpacity = useRef<Record<string, Animated.Value>>({}).current;
   const layoutWidths = useRef<Record<string, number>>({}).current;
   const contentWidths = useRef<Record<string, number>>({}).current;
   const topInset =
     Platform.OS === "android" ? (RNStatusBar.currentHeight ?? 0) + 8 : 8;
+
+  useEffect(() => {
+    if (selectedIdea) {
+      previewTranslate.setValue({ x: 0, y: 0 });
+    }
+  }, [selectedIdea, previewTranslate]);
+
+  const closePreview = useCallback(() => {
+    setSelectedIdea(null);
+  }, []);
+
+  const previewPanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: (_, gesture) =>
+          Math.abs(gesture.dx) > 4 || Math.abs(gesture.dy) > 4,
+        onMoveShouldSetPanResponderCapture: (_, gesture) =>
+          Math.abs(gesture.dx) > 4 || Math.abs(gesture.dy) > 4,
+        onPanResponderMove: (_, gesture) => {
+          previewTranslate.setValue({ x: gesture.dx, y: gesture.dy });
+        },
+        onPanResponderRelease: (_, gesture) => {
+          const distance = Math.sqrt(
+            Math.pow(gesture.dx, 2) + Math.pow(gesture.dy, 2)
+          );
+
+          if (distance > 140) {
+            Animated.timing(previewTranslate, {
+              toValue: { x: gesture.dx * 2, y: gesture.dy * 2 },
+              duration: 180,
+              useNativeDriver: true,
+            }).start(closePreview);
+          } else {
+            Animated.spring(previewTranslate, {
+              toValue: { x: 0, y: 0 },
+              useNativeDriver: true,
+            }).start();
+          }
+        },
+      }),
+    [closePreview, previewTranslate]
+  );
 
   const loadMatches = useCallback(async () => {
     setLoading(true);
@@ -227,11 +277,82 @@ export default function Matches() {
 
   if (hasCouple === false) {
     return (
-      <View style={styles.emptyState}>
-        <Text style={styles.emptyTitle}>
-          Link accounts with someone to see your matching dates.
-        </Text>
-      </View>
+      <LinearGradient colors={["#fb7185", "#fff1f2"]} style={styles.screen}>
+        <BrandStatusBar />
+        <View style={styles.topGlow} />
+        <View style={styles.bottomGlow} />
+        <ScrollView
+          contentContainerStyle={[styles.noPartnerScroll, { paddingTop: topInset }]}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.header}>
+            <View style={styles.headerBadge}>
+              <Text style={styles.headerBadgeText}>Matches</Text>
+            </View>
+            <View style={styles.headerTitleRow}>
+              <Text style={styles.headerIcon}>❤</Text>
+              <Text style={styles.title}>Shared date ideas</Text>
+            </View>
+            <Text style={styles.subtitle}>
+              Date ideas you and your partner both liked.
+            </Text>
+          </View>
+
+          <View style={styles.noPartnerCard}>
+            <View style={styles.noPartnerIconWrap}>
+              <Text style={styles.noPartnerIcon}>💞</Text>
+            </View>
+            <Text style={styles.noPartnerHeadline}>Link your partner first</Text>
+            <Text style={styles.noPartnerBody}>
+              Matches only appear after you connect accounts. Then we can show ideas you
+              both swiped right on.
+            </Text>
+          </View>
+
+          <View style={styles.noPartnerSteps}>
+            <Text style={styles.noPartnerStepsTitle}>How it works</Text>
+            <View style={styles.stepRow}>
+              <View style={styles.stepBadge}>
+                <Text style={styles.stepBadgeText}>1</Text>
+              </View>
+              <Text style={styles.stepText}>
+                Link your partner by following the instructions after pressing the link partner button.
+              </Text>
+            </View>
+            <View style={styles.stepRow}>
+              <View style={styles.stepBadge}>
+                <Text style={styles.stepBadgeText}>2</Text>
+              </View>
+              <Text style={styles.stepText}>
+                Keep swiping on the home tab — likes are saved for both of you.
+              </Text>
+            </View>
+            <View style={styles.stepRow}>
+              <View style={styles.stepBadge}>
+                <Text style={styles.stepBadgeText}>3</Text>
+              </View>
+              <Text style={styles.stepText}>
+                When you both like the same idea, it shows up here as a match.
+              </Text>
+            </View>
+          </View>
+
+          <Pressable
+            style={({ pressed }) => [
+              styles.noPartnerCta,
+              pressed && styles.noPartnerCtaPressed,
+            ]}
+            onPress={() => router.push("/profile/link")}
+          >
+            <Text style={styles.noPartnerCtaText}>Link partner</Text>
+          </Pressable>
+
+          <Text style={styles.noPartnerHint}>
+            You can still browse and like dates before linking — your likes stay on the Likes
+            tab.
+          </Text>
+        </ScrollView>
+      </LinearGradient>
     );
   }
 
@@ -245,6 +366,7 @@ export default function Matches() {
 
   return (
     <LinearGradient colors={["#fb7185", "#fff1f2"]} style={styles.screen}>
+      <BrandStatusBar />
       <View style={styles.topGlow} />
       <View style={styles.bottomGlow} />
       <ScrollView contentContainerStyle={[styles.page, { paddingTop: topInset }]}>
@@ -314,10 +436,15 @@ export default function Matches() {
                     };
 
                     return (
-                      <View key={item.id} style={styles.card}>
-                        {item.image ? (
-                          <Image source={{ uri: item.image }} style={styles.cardImage} />
-                        ) : null}
+                      <Pressable
+                        key={item.id}
+                        style={({ pressed }) => [
+                          styles.card,
+                          pressed && styles.cardPressed,
+                        ]}
+                        onPress={() => setSelectedIdea(item)}
+                      >
+                        {item.image ? <CardImageWithLoader uri={item.image} /> : null}
                         <View style={styles.cardBody}>
                           <View
                             style={[
@@ -344,7 +471,7 @@ export default function Matches() {
                         <View
                           style={[styles.cardAccent, { backgroundColor: visuals.accent }]}
                         />
-                      </View>
+                      </Pressable>
                     );
                   })}
                 </ScrollView>
@@ -395,6 +522,25 @@ export default function Matches() {
           })
         )}
       </ScrollView>
+      <Modal
+        visible={Boolean(selectedIdea)}
+        animationType="fade"
+        transparent
+        onRequestClose={closePreview}
+      >
+        <View style={styles.previewBackdrop}>
+          <Pressable style={styles.previewBackdropPress} onPress={closePreview} />
+          <Animated.View
+            style={[
+              styles.previewCard,
+              { transform: previewTranslate.getTranslateTransform() },
+            ]}
+            {...previewPanResponder.panHandlers}
+          >
+            {selectedIdea ? <DateCard item={selectedIdea} /> : null}
+          </Animated.View>
+        </View>
+      </Modal>
     </LinearGradient>
   );
 }
@@ -406,6 +552,32 @@ const MORE_FADE_MARGIN = 4;
 const CARD_WIDTH = Math.floor(
   (Dimensions.get("window").width - PAGE_PADDING * 2 - GRID_GAP) / 2
 );
+
+function CardImageWithLoader({ uri }: { uri: string }) {
+  const [loading, setLoading] = useState(true);
+
+  return (
+    <View style={styles.cardImageWrap}>
+      <Image
+        key={uri}
+        source={{ uri }}
+        style={styles.cardImage}
+        onLoadStart={() => setLoading(true)}
+        onLoadEnd={() => {
+          // On fast/cached loads, `onLoadEnd` can fire before the spinner paints.
+          // Deferring ensures at least one frame where the overlay can render.
+          setTimeout(() => setLoading(false), 0);
+        }}
+        onError={() => setTimeout(() => setLoading(false), 0)}
+      />
+      {loading ? (
+        <View pointerEvents="none" style={styles.cardImageLoadingOverlay}>
+          <ActivityIndicator size="small" color="#e11d48" />
+        </View>
+      ) : null}
+    </View>
+  );
+}
 
 const styles = StyleSheet.create({
   screen: {
@@ -602,10 +774,26 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 8 },
     elevation: 3,
   },
+  cardPressed: {
+    opacity: 0.92,
+    transform: [{ scale: 0.99 }],
+  },
   cardImage: {
     width: "100%",
     height: CARD_WIDTH * 1.1,
     backgroundColor: "#f1f5f9",
+  },
+  cardImageWrap: {
+    width: "100%",
+    height: CARD_WIDTH * 1.1,
+    backgroundColor: "#f1f5f9",
+  },
+  cardImageLoadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(241, 245, 249, 0.5)",
+    zIndex: 2,
   },
   cardBody: {
     padding: 12,
@@ -636,16 +824,141 @@ const styles = StyleSheet.create({
     height: 4,
     marginTop: "auto",
   },
-  emptyState: {
+  previewBackdrop: {
     flex: 1,
-    padding: 20,
+    backgroundColor: "rgba(15, 23, 42, 0.5)",
+    alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#fff1f2",
+    padding: 20,
   },
-  emptyTitle: {
-    fontSize: 18,
+  previewBackdropPress: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  previewCard: {
+    width: "100%",
+    maxWidth: 420,
+    alignItems: "center",
+  },
+  noPartnerScroll: {
+    flexGrow: 1,
+    paddingHorizontal: PAGE_PADDING,
+    paddingBottom: 40,
+  },
+  noPartnerCard: {
+    marginBottom: 16,
+    padding: 20,
+    borderRadius: 20,
+    backgroundColor: "rgba(255, 255, 255, 0.94)",
+    borderWidth: 1,
+    borderColor: "rgba(244, 63, 94, 0.18)",
+    alignItems: "center",
+    shadowColor: "#7f1d1d",
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 3,
+  },
+  noPartnerIconWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: "rgba(244, 63, 94, 0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(244, 63, 94, 0.22)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 14,
+  },
+  noPartnerIcon: {
+    fontSize: 34,
+  },
+  noPartnerHeadline: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#7f1d1d",
     textAlign: "center",
+    marginBottom: 8,
+  },
+  noPartnerBody: {
+    fontSize: 14,
+    lineHeight: 21,
     color: "#475569",
+    textAlign: "center",
+  },
+  noPartnerSteps: {
+    marginBottom: 18,
+    padding: 16,
+    borderRadius: 18,
+    backgroundColor: "rgba(255, 255, 255, 0.88)",
+    borderWidth: 1,
+    borderColor: "rgba(15, 23, 42, 0.06)",
+    gap: 14,
+  },
+  noPartnerStepsTitle: {
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+    color: "#be123c",
+    marginBottom: 2,
+  },
+  stepRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+  },
+  stepBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "rgba(244, 63, 94, 0.14)",
+    borderWidth: 1,
+    borderColor: "rgba(244, 63, 94, 0.25)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  stepBadgeText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#be123c",
+  },
+  stepText: {
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 20,
+    color: "#334155",
+    paddingTop: 2,
+  },
+  noPartnerCta: {
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: "rgba(251, 55, 111, 0.92)",
+    borderWidth: 1,
+    borderColor: "rgba(190, 18, 60, 0.35)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 14,
+    shadowColor: "#7f1d1d",
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 3,
+  },
+  noPartnerCtaPressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.99 }],
+  },
+  noPartnerCtaText: {
+    color: "#ffffff",
+    fontSize: 16,
+    fontWeight: "800",
+  },
+  noPartnerHint: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: "#64748b",
+    textAlign: "center",
+    paddingHorizontal: 4,
   },
   loadingState: {
     flex: 1,

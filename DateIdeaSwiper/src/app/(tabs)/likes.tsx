@@ -1,28 +1,28 @@
-import {
-  View,
-  Text,
-  ActivityIndicator,
-  ScrollView,
-  StyleSheet,
-  Pressable,
-  Modal,
-  FlatList,
-  SafeAreaView,
-  Animated,
-  PanResponder,
-  Platform,
-  StatusBar as RNStatusBar,
-} from "react-native";
-import { StatusBar } from "expo-status-bar";
-import { useCallback, useMemo, useState, useRef, useEffect } from "react";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect } from "expo-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+    ActivityIndicator,
+    Animated,
+    FlatList,
+    Modal,
+    PanResponder,
+    Platform,
+    Pressable,
+    StatusBar as RNStatusBar,
+    SafeAreaView,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View,
+} from "react-native";
 import Svg, { Path } from "react-native-svg";
+import BrandStatusBar from "../../components/BrandStatusBar";
 import DateCard from "../../components/DateCard";
 import { supabase } from "../../lib/supabase";
 import { getDateIdeas } from "../../services/getDateIdeas";
-import type { DateIdea } from "../../types/date";
 import { useLikes } from "../../store/LikesContext";
+import type { DateIdea } from "../../types/date";
 
 export default function LikesScreen() {
   const [heroHeight, setHeroHeight] = useState(0);
@@ -402,7 +402,7 @@ export default function LikesScreen() {
             />
           </Svg>
         </View>
-        <StatusBar style="dark" backgroundColor="#ffffff" />
+        <BrandStatusBar />
         <ScrollView contentContainerStyle={[styles.page, { paddingTop: topInset }]}>
         <View style={styles.heroWrap}>
           <View

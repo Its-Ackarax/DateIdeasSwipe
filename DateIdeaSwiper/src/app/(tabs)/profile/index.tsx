@@ -1,9 +1,10 @@
-import { View, Text, ActivityIndicator, Alert, Pressable, StyleSheet } from "react-native";
+import { View, Text, ActivityIndicator, Pressable, StyleSheet } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "expo-linear-gradient";
 import { useCallback, useState } from "react";
 import { supabase } from "../../../lib/supabase";
 import { router, useFocusEffect } from "expo-router";
+import ConfirmDialog from "../../../components/ConfirmDialog";
 
 export default function Profile() {
   const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -12,6 +13,13 @@ export default function Profile() {
   const [likesCount, setLikesCount] = useState(0);
   const [matchesCount, setMatchesCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [resetDialogVisible, setResetDialogVisible] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [resetDoneVisible, setResetDoneVisible] = useState(false);
+  const [logoutDialogVisible, setLogoutDialogVisible] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [unlinkDialogVisible, setUnlinkDialogVisible] = useState(false);
+  const [unlinking, setUnlinking] = useState(false);
 
   const loadProfile = useCallback(async () => {
     setLoading(true);
@@ -83,105 +91,108 @@ export default function Profile() {
   async function unlinkPartner() {
     if (!coupleId) return;
 
-    await supabase.from("couples").delete().eq("id", coupleId);
-
-    setPartner(null);
-    setCoupleId(null);
-    loadProfile();
+    if (unlinking) return;
+    setUnlinking(true);
+    try {
+      await supabase.from("couples").delete().eq("id", coupleId);
+      setPartner(null);
+      setCoupleId(null);
+      setUnlinkDialogVisible(false);
+      loadProfile();
+    } finally {
+      setUnlinking(false);
+    }
   }
 
   async function resetSwipes() {
-    const { data: userData } = await supabase.auth.getUser();
-    const user = userData.user;
-    if (!user) return;
+    if (resetting) return;
+    setResetting(true);
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      const user = userData.user;
+      if (!user) return;
 
-    setLikesCount(0);
-    setMatchesCount(0);
-    await AsyncStorage.removeItem("matchModalDisabled");
+      setLikesCount(0);
+      setMatchesCount(0);
+      await AsyncStorage.removeItem("matchModalDisabled");
 
-    const { data: couple } = await supabase
-      .from("couples")
-      .select("*")
-      .or(`user1.eq.${user.id},user2.eq.${user.id}`)
-      .single();
+      const { data: couple } = await supabase
+        .from("couples")
+        .select("*")
+        .or(`user1.eq.${user.id},user2.eq.${user.id}`)
+        .single();
 
-    const partnerId =
-      couple?.user1 === user.id ? couple.user2 : couple?.user1 ?? null;
+      const partnerId =
+        couple?.user1 === user.id ? couple.user2 : couple?.user1 ?? null;
 
-    await supabase.from("swipes").delete().eq("user_id", user.id);
+      await supabase.from("swipes").delete().eq("user_id", user.id);
 
-    if (couple?.id) {
-      await supabase.from("matches").delete().eq("couple_id", couple.id);
-    }
+      if (couple?.id) {
+        await supabase.from("matches").delete().eq("couple_id", couple.id);
+      }
 
-    if (couple?.id && partnerId) {
-      const { data: swipeData } = await supabase
-        .from("swipes")
-        .select("date_id, user_id")
-        .in("user_id", [user.id, partnerId])
-        .eq("liked", true);
+      if (couple?.id && partnerId) {
+        const { data: swipeData } = await supabase
+          .from("swipes")
+          .select("date_id, user_id")
+          .in("user_id", [user.id, partnerId])
+          .eq("liked", true);
 
-      if (swipeData) {
-        const likedByDate = new Map<string, Set<string>>();
+        if (swipeData) {
+          const likedByDate = new Map<string, Set<string>>();
 
-        swipeData.forEach((row) => {
-          const dateId = String(row.date_id);
-          const userId = String(row.user_id);
+          swipeData.forEach((row) => {
+            const dateId = String(row.date_id);
+            const userId = String(row.user_id);
 
-          if (!likedByDate.has(dateId)) {
-            likedByDate.set(dateId, new Set());
-          }
+            if (!likedByDate.has(dateId)) {
+              likedByDate.set(dateId, new Set());
+            }
 
-          likedByDate.get(dateId)?.add(userId);
-        });
+            likedByDate.get(dateId)?.add(userId);
+          });
 
-        for (const [dateId, users] of likedByDate.entries()) {
-          if (users.size >= 2) {
-            await supabase.from("matches").insert({
-              couple_id: couple.id,
-              date_id: dateId,
-            });
+          for (const [dateId, users] of likedByDate.entries()) {
+            if (users.size >= 2) {
+              await supabase.from("matches").insert({
+                couple_id: couple.id,
+                date_id: dateId,
+              });
+            }
           }
         }
       }
-    }
 
-    alert("Swipes reset. You can start again.");
-    loadProfile();
+      setResetDialogVisible(false);
+      setResetDoneVisible(true);
+      loadProfile();
+    } finally {
+      setResetting(false);
+    }
   }
 
   async function logout() {
-    await supabase.auth.signOut();
-    router.replace("/auth/login");
+    if (loggingOut) return;
+    setLoggingOut(true);
+    try {
+      await supabase.auth.signOut();
+      setLogoutDialogVisible(false);
+      router.replace("/auth/login");
+    } finally {
+      setLoggingOut(false);
+    }
   }
 
   function confirmUnlink() {
-    Alert.alert(
-      "Unlink partner?",
-      "This will remove the link between you and your partner.",
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Unlink", style: "destructive", onPress: unlinkPartner },
-      ]
-    );
+    setUnlinkDialogVisible(true);
   }
 
   function confirmReset() {
-    Alert.alert(
-      "Reset swipes?",
-      "This will clear your swipes and refresh matches for your partner.",
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Reset", style: "destructive", onPress: resetSwipes },
-      ]
-    );
+    setResetDialogVisible(true);
   }
 
   function confirmLogout() {
-    Alert.alert("Log out?", "You will need to sign in again.", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Log out", style: "destructive", onPress: logout },
-    ]);
+    setLogoutDialogVisible(true);
   }
 
   if (loading) return <ActivityIndicator style={{ flex: 1 }} />;
@@ -291,6 +302,49 @@ export default function Profile() {
           <Text style={styles.secondaryButtonText}>Settings</Text>
         </Pressable>
       </View>
+      <ConfirmDialog
+        visible={resetDialogVisible}
+        title="Reset swipes?"
+        message="This will clear your swipes and refresh matches for your partner."
+        cancelText="Cancel"
+        confirmText="Reset"
+        destructive
+        loading={resetting}
+        onCancel={() => setResetDialogVisible(false)}
+        onConfirm={resetSwipes}
+      />
+      <ConfirmDialog
+        visible={resetDoneVisible}
+        title="Swipes reset"
+        message="You can start swiping again."
+        cancelText="Close"
+        confirmText="OK"
+        loading={false}
+        onCancel={() => setResetDoneVisible(false)}
+        onConfirm={() => setResetDoneVisible(false)}
+      />
+      <ConfirmDialog
+        visible={logoutDialogVisible}
+        title="Log out?"
+        message="You will need to sign in again."
+        cancelText="Cancel"
+        confirmText="Log out"
+        destructive
+        loading={loggingOut}
+        onCancel={() => setLogoutDialogVisible(false)}
+        onConfirm={logout}
+      />
+      <ConfirmDialog
+        visible={unlinkDialogVisible}
+        title="Unlink partner?"
+        message="This will remove the link between you and your partner."
+        cancelText="Cancel"
+        confirmText="Unlink"
+        destructive
+        loading={unlinking}
+        onCancel={() => setUnlinkDialogVisible(false)}
+        onConfirm={unlinkPartner}
+      />
     </LinearGradient>
   );
 }

@@ -1,12 +1,38 @@
-import { View, Text, StyleSheet, Image, Dimensions } from "react-native";
+import { useEffect, useState } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  Image,
+  Dimensions,
+  ActivityIndicator,
+} from "react-native";
 
 export default function DateCard({ item }) {
   if (!item) return null;
 
+  const [imageLoading, setImageLoading] = useState(Boolean(item.image));
+
+  useEffect(() => {
+    setImageLoading(Boolean(item.image));
+  }, [item?.image]);
 
   return (
     <View style={styles.card}>
-      <Image source={{ uri: item.image }} style={styles.image} />
+      <View style={styles.imageWrap}>
+        <Image
+          source={{ uri: item.image }}
+          style={styles.image}
+          onLoadStart={() => setImageLoading(true)}
+          onLoadEnd={() => setImageLoading(false)}
+          onError={() => setImageLoading(false)}
+        />
+        {imageLoading ? (
+          <View pointerEvents="none" style={styles.imageLoadingOverlay}>
+            <ActivityIndicator size="large" color="#e11d48" />
+          </View>
+        ) : null}
+      </View>
       <View style={styles.content}>
         <Text style={styles.title}>{item.title}</Text>
         <View style={styles.chipRow}>
@@ -44,10 +70,21 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 10 },
   },
+  imageWrap: {
+    width: "100%",
+    height: IMAGE_HEIGHT,
+    backgroundColor: "#f1f5f9",
+  },
   image: {
     width: "100%",
     height: IMAGE_HEIGHT,
     backgroundColor: "#f1f5f9",
+  },
+  imageLoadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(241, 245, 249, 0.55)",
   },
   content: {
     padding: 16,
