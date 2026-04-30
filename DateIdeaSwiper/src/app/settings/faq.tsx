@@ -4,9 +4,11 @@ import { useMemo } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import SettingsRow from "../../components/SettingsRow";
+import useAndroidNavigationBar from "../../hooks/useAndroidNavigationBar";
 
 export default function FAQScreen() {
   const insets = useSafeAreaInsets();
+  useAndroidNavigationBar({ backgroundColor: "#fff1f2", buttonStyle: "dark", position: "relative" });
 
   const faqs = useMemo(
     () => [

@@ -16,6 +16,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import useAndroidNavigationBar from "../../hooks/useAndroidNavigationBar";
 const SUPPORT_EMAIL = "dateswipersupport@gmail.com";
 const SUPPORT_X_URL = "https://x.com/DeanRigneyDev";
 
@@ -36,6 +37,7 @@ const MESSAGE_PLACEHOLDER: Record<SupportTopic, string> = {
 
 export default function SupportScreen() {
   const insets = useSafeAreaInsets();
+  useAndroidNavigationBar({ backgroundColor: "#fff1f2", buttonStyle: "dark", position: "relative" });
   const [message, setMessage] = useState("");
   const [topic, setTopic] = useState<SupportTopic>("Account");
 

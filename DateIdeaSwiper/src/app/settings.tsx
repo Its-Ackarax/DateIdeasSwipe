@@ -5,12 +5,14 @@ import { useCallback } from "react";
 import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import SettingsRow from "../components/SettingsRow";
+import useAndroidNavigationBar from "../hooks/useAndroidNavigationBar";
 
 const PRIVACY_URL = "https://example.com/privacy-policy";
 const TERMS_URL = "https://example.com/terms-of-service";
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
+  useAndroidNavigationBar({ backgroundColor: "#fff1f2", buttonStyle: "dark", position: "relative" });
 
   const openUrl = useCallback(async (url: string) => {
     try {
@@ -80,7 +82,7 @@ export default function SettingsScreen() {
               />
               <SettingsRow
                 title="Contact Support"
-                subtitle="Fastest: X (@DeanRigneyDev). Fallback: email."
+                subtitle="Fastest: X (@DeanRigneyDev)"
                 icon="help-buoy-outline"
                 onPress={() => router.push("/settings/support")}
               />

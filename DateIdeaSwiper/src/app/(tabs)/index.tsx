@@ -3,8 +3,7 @@ import { Pacifico_400Regular } from "@expo-google-fonts/pacifico";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useFocusEffect } from "expo-router";
-import BrandStatusBar from "../../components/BrandStatusBar";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     ActivityIndicator,
     Animated,
@@ -16,16 +15,19 @@ import {
     View,
 } from "react-native";
 import Swiper from "react-native-deck-swiper";
+import BrandStatusBar from "../../components/BrandStatusBar";
 
 import DateCard from "../../components/DateCard";
 import { supabase } from "../../lib/supabase";
 import { useLikes } from "../../store/LikesContext";
+import { usePro } from "../../store/ProContext";
 
 import { checkMatch } from "../../services/checkMatch";
 import { getCoupleId } from "../../services/getCoupleId";
 import { getDateIdeas } from "../../services/getDateIdeas";
 import { saveSwipe } from "../../services/saveSwipe";
 import { DateIdea } from "../../types/date";
+import { dailySeededOrder } from "../../utils/dailySeededOrder";
 
 export default function Home() {
 
@@ -34,9 +36,11 @@ export default function Home() {
     Pacifico_400Regular,
   });
 
+  const { isPro } = usePro();
   const { addLike } = useLikes();
   const [dates, setDates] = useState<DateIdea[]>([]);
   const [seenIds, setSeenIds] = useState<string[]>([]);
+  const [userId, setUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [datesLoading, setDatesLoading] = useState(true);
   const [swiperKey, setSwiperKey] = useState(0);
@@ -160,6 +164,11 @@ export default function Home() {
     const user = data.user;
     if (!user) return;
 
+    if (!isPro && seenIds.length >= 10) {
+      router.push("/paywall");
+      return;
+    }
+
     setSeenIds((prev) => {
       const id = String(date.id);
       return prev.includes(id) ? prev : [...prev, id];
@@ -195,6 +204,7 @@ export default function Home() {
       }
       const user = userData.user;
       if (!user) return;
+      setUserId(user.id);
 
       const { data, error } = await supabase
         .from("swipes")
@@ -236,9 +246,12 @@ export default function Home() {
     }, [loadSeen])
   );
 
-  const filteredDates = dates.filter(
-    d => !seenIds.includes(d.id)
-  );
+  const todayKey = new Date().toISOString().slice(0, 10); // UTC day key
+  const filteredDates = useMemo(() => dates.filter((d) => !seenIds.includes(d.id)), [dates, seenIds]);
+  const deckDates = useMemo(() => {
+    if (!userId) return filteredDates;
+    return dailySeededOrder(filteredDates, `${userId}:${todayKey}`);
+  }, [filteredDates, userId, todayKey]);
 
   if (!fontsLoaded || loading || datesLoading) {
     return <ActivityIndicator size="large" style={{ flex: 1 }} />;
@@ -319,14 +332,14 @@ export default function Home() {
           </Animated.View>
         ) : null}
         <Swiper
-          key={`swiper-${swiperKey}-${filteredDates.length}`}
-          cards={filteredDates}
+          key={`swiper-${swiperKey}-${deckDates.length}`}
+          cards={deckDates}
           renderCard={(card) => <DateCard item={card} />}
           onSwipedRight={(i) => {
-            handleSwipe(filteredDates[i], true);
+            handleSwipe(deckDates[i], true);
           }}
           onSwipedLeft={(i) => {
-            handleSwipe(filteredDates[i], false);
+            handleSwipe(deckDates[i], false);
           }}
           stackSize={3}
           backgroundColor="transparent"
