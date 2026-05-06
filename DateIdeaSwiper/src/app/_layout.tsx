@@ -4,6 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import Purchases from "react-native-purchases";
 import analytics from "@react-native-firebase/analytics";
 import { supabase } from "../lib/supabase";
+import '../../firebase.js';
+import '../../analytics.js';
+import { posthog } from '../../analytics';
 import { ProContext } from "../store/ProContext";
 import {
   configureRevenueCat,
@@ -15,6 +18,10 @@ import {
 export default function RootLayout() {
   const [customerInfo, setCustomerInfo] = useState<any | null>(null);
   const [isPro, setIsPro] = useState(false);
+
+  useEffect(() => {
+    posthog.capture('app_opened');
+  }, []);
 
   useEffect(() => {
     let active = true;
