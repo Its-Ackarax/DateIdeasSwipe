@@ -2,6 +2,7 @@ import { Stack } from "expo-router";
 import { LikesProvider } from "../store/LikesContext";
 import { useEffect, useMemo, useState } from "react";
 import Purchases from "react-native-purchases";
+import analytics from "@react-native-firebase/analytics";
 import { supabase } from "../lib/supabase";
 import { ProContext } from "../store/ProContext";
 import {
@@ -21,6 +22,14 @@ export default function RootLayout() {
     (async () => {
       const { data } = await supabase.auth.getUser();
       const userId = data.user?.id ?? null;
+
+      try {
+        await analytics().logAppOpen();
+        await analytics().setUserId(userId);
+      } catch {
+        // ignore
+      }
+
       await configureRevenueCat(userId);
 
       try {
@@ -38,6 +47,12 @@ export default function RootLayout() {
       try {
         if (userId) await logInRevenueCat(userId);
         else await logOutRevenueCat();
+      } catch {
+        // ignore
+      }
+
+      try {
+        await analytics().setUserId(userId);
       } catch {
         // ignore
       }
