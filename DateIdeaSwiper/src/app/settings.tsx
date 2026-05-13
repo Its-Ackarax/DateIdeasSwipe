@@ -1,3 +1,5 @@
+import * as Sentry from "@sentry/react-native";
+import { captureAppError } from "../lib/captureAppError";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Linking from "expo-linking";
 import { router } from "expo-router";
@@ -22,7 +24,8 @@ export default function SettingsScreen() {
         return;
       }
       await Linking.openURL(url);
-    } catch {
+    } catch (error) {
+      captureAppError(error, { op: "settings_openUrl", screen: "settings" });
       Alert.alert("Can't open link", "Something went wrong opening that link.");
     }
   }, []);
@@ -119,6 +122,22 @@ export default function SettingsScreen() {
               />
             </View>
           </View>
+
+          {__DEV__ ? (
+            <View style={styles.section}>
+              <Text style={styles.sectionLabel}>Developer</Text>
+              <View style={styles.stack}>
+                <SettingsRow
+                  title="Try!"
+                  subtitle="Send a test error to Sentry"
+                  icon="bug-outline"
+                  onPress={() => {
+                    Sentry.captureException(new Error("First error"));
+                  }}
+                />
+              </View>
+            </View>
+          ) : null}
 
           <View style={styles.footer}>
             <Text style={styles.footerText}>

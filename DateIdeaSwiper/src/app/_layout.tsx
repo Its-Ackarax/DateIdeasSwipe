@@ -14,8 +14,24 @@ import {
   logInRevenueCat,
   logOutRevenueCat,
 } from "../lib/revenuecat";
+import { captureAppError } from "../lib/captureAppError";
+import * as Sentry from "@sentry/react-native";
 
-export default function RootLayout() {
+Sentry.init({
+  dsn: 'https://c44427c6d0271d552c47dcae1e696da7@o4511373612679168.ingest.de.sentry.io/4511373614448720',
+
+  // Adds more context data to events (IP address, cookies, user, etc.)
+  // For more information, visit: https://docs.sentry.io/platforms/react-native/data-management/data-collected/
+  sendDefaultPii: true,
+
+  // Enable Logs
+  enableLogs: false,
+
+  // uncomment the line below to enable Spotlight (https://spotlightjs.com)
+  // spotlight: __DEV__,
+});
+
+function RootLayout() {
   const [customerInfo, setCustomerInfo] = useState<any | null>(null);
   const [isPro, setIsPro] = useState(false);
 
@@ -33,8 +49,8 @@ export default function RootLayout() {
       try {
         await analytics().logAppOpen();
         await analytics().setUserId(userId);
-      } catch {
-        // ignore
+      } catch (error) {
+        captureAppError(error, { op: "analytics_init", phase: "app_open" });
       }
 
       await configureRevenueCat(userId);
@@ -44,8 +60,8 @@ export default function RootLayout() {
         if (!active) return;
         setCustomerInfo(info);
         setIsPro(hasProEntitlement(info));
-      } catch {
-        // ignore
+      } catch (error) {
+        captureAppError(error, { op: "purchases_getCustomerInfo" });
       }
     })();
 
@@ -54,14 +70,14 @@ export default function RootLayout() {
       try {
         if (userId) await logInRevenueCat(userId);
         else await logOutRevenueCat();
-      } catch {
-        // ignore
+      } catch (error) {
+        captureAppError(error, { op: "purchases_auth_identity", userId });
       }
 
       try {
         await analytics().setUserId(userId);
-      } catch {
-        // ignore
+      } catch (error) {
+        captureAppError(error, { op: "analytics_setUserId", phase: "auth_change" });
       }
     });
 
@@ -88,3 +104,5 @@ export default function RootLayout() {
     </ProContext.Provider>
   );
 }
+
+export default Sentry.wrap(RootLayout);

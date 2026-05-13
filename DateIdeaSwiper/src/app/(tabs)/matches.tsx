@@ -18,6 +18,7 @@ import {
 } from "react-native";
 import BrandStatusBar from "../../components/BrandStatusBar";
 import DateCard from "../../components/DateCard";
+import { captureAppError } from "../../lib/captureAppError";
 import { supabase } from "../../lib/supabase";
 import { getDateIdeas } from "../../services/getDateIdeas";
 import type { DateIdea } from "../../types/date";
@@ -162,7 +163,7 @@ export default function Matches() {
         setMatches([]);
       }
     } catch (error) {
-      console.log(error);
+      captureAppError(error, { op: "loadMatches", screen: "matches" });
       setMatches([]);
       setHasCouple(false);
     } finally {

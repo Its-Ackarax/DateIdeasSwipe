@@ -18,6 +18,7 @@ import Swiper from "react-native-deck-swiper";
 import BrandStatusBar from "../../components/BrandStatusBar";
 
 import DateCard from "../../components/DateCard";
+import { captureAppError } from "../../lib/captureAppError";
 import { supabase } from "../../lib/supabase";
 import { useLikes } from "../../store/LikesContext";
 import { usePro } from "../../store/ProContext";
@@ -64,12 +65,12 @@ export default function Home() {
           const { data, error } = await supabase.auth.getSession();
           if (!active) return;
           if (error) {
-            console.log(error);
+            captureAppError(error, { op: "getSession", screen: "home" });
             return;
           }
           if (!data.session) router.replace("../auth/login");
         } catch (error) {
-          if (active) console.log(error);
+          if (active) captureAppError(error, { op: "getSession_catch", screen: "home" });
         }
       })();
 
@@ -106,7 +107,7 @@ export default function Home() {
       const stored = await AsyncStorage.getItem("matchModalDisabled");
       setMatchToastDisabled(stored === "true");
     } catch (error) {
-      console.log(error);
+      captureAppError(error, { op: "asyncStorage_matchModal", screen: "home" });
     }
   }, []);
 
@@ -159,47 +160,51 @@ export default function Home() {
 
   async function handleSwipe(date: DateIdea, liked: boolean) {
     if (!date) return;
-    triggerSwipeFeedback(liked ? "like" : "pass");
-    const { data } = await supabase.auth.getUser();
-    const user = data.user;
-    if (!user) return;
+    try {
+      triggerSwipeFeedback(liked ? "like" : "pass");
+      const { data } = await supabase.auth.getUser();
+      const user = data.user;
+      if (!user) return;
 
-    if (!isPro && seenIds.length >= 10) {
-      router.push("/paywall");
-      return;
-    }
+      if (!isPro && seenIds.length >= 10) {
+        router.push("/paywall");
+        return;
+      }
 
-    setSeenIds((prev) => {
-      const id = String(date.id);
-      return prev.includes(id) ? prev : [...prev, id];
-    });
+      setSeenIds((prev) => {
+        const id = String(date.id);
+        return prev.includes(id) ? prev : [...prev, id];
+      });
 
-    await saveSwipe(user.id, date.id, liked);
+      await saveSwipe(user.id, date.id, liked);
 
-    if (liked) {
-      addLike(date); // keep local likes page working
+      if (liked) {
+        addLike(date); // keep local likes page working
 
-      const coupleId = await getCoupleId(user.id);
-      if (!coupleId) return;
+        const coupleId = await getCoupleId(user.id);
+        if (!coupleId) return;
 
-      const matched = await checkMatch(coupleId, date.id);
+        const matched = await checkMatch(coupleId, date.id);
 
-      if (matched) {
-        triggerMatchHearts();
-        if (!matchToastDisabled) {
-          openMatchModal();
-          setTimeout(() => {
-            setSwiperKey((prev) => prev + 1);
-          }, 0);
+        if (matched) {
+          triggerMatchHearts();
+          if (!matchToastDisabled) {
+            openMatchModal();
+            setTimeout(() => {
+              setSwiperKey((prev) => prev + 1);
+            }, 0);
+          }
         }
       }
+    } catch (error) {
+      captureAppError(error, { op: "handleSwipe", dateId: String(date.id), liked });
     }
   }
   const loadSeen = useCallback(async () => {
     try {
       const { data: userData, error: userError } = await supabase.auth.getUser();
       if (userError) {
-        console.log(userError);
+        captureAppError(userError, { op: "loadSeen_getUser", screen: "home" });
         return;
       }
       const user = userData.user;
@@ -212,13 +217,13 @@ export default function Home() {
         .eq("user_id", user.id);
 
       if (error) {
-        console.log(error);
+        captureAppError(error, { op: "loadSeen_swipes", screen: "home" });
         return;
       }
 
       if (data) setSeenIds(data.map(x => String(x.date_id)));
     } catch (error) {
-      console.log(error);
+      captureAppError(error, { op: "loadSeen_catch", screen: "home" });
     } finally {
       setLoading(false);
     }
@@ -229,7 +234,7 @@ export default function Home() {
       const data = await getDateIdeas();
       setDates(data);
     } catch (error) {
-      console.log(error);
+      captureAppError(error, { op: "loadDates", screen: "home" });
     } finally {
       setDatesLoading(false);
     }
@@ -392,7 +397,9 @@ export default function Home() {
                 ]}
                 onPress={() => {
                   setMatchToastDisabled(true);
-                  AsyncStorage.setItem("matchModalDisabled", "true");
+                  void AsyncStorage.setItem("matchModalDisabled", "true").catch((err) =>
+                    captureAppError(err, { op: "asyncStorage_matchModal_disable", screen: "home" })
+                  );
                   setMatchVisible(false);
                 }}
               >

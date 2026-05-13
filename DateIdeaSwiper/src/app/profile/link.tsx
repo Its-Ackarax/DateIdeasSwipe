@@ -14,6 +14,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { captureAppError } from "../../lib/captureAppError";
 import { supabase } from "../../lib/supabase";
 import { generateCode } from "../../services/generateCode";
 import { saveMatch } from "../../services/saveMatch";
@@ -84,7 +85,8 @@ export default function LinkPartner() {
       setCopyFeedback(true);
       if (copyFeedbackTimer.current) clearTimeout(copyFeedbackTimer.current);
       copyFeedbackTimer.current = setTimeout(() => setCopyFeedback(false), 2500);
-    } catch {
+    } catch (error) {
+      captureAppError(error, { op: "link_copyInviteCode", screen: "link" });
       openAlert({
         title: "Copy failed",
         message: "Could not copy the code. You can select the code above and copy it manually.",
@@ -115,6 +117,7 @@ export default function LinkPartner() {
         .or(`user1.eq.${user.id},user2.eq.${user.id}`);
 
       if (existingError) {
+        captureAppError(existingError, { op: "createInvite_couples_lookup", screen: "link" });
         openAlert({
           title: "Could not check your link",
           message: existingError.message,
@@ -151,6 +154,7 @@ export default function LinkPartner() {
           .eq("id", pendingAsCreator.id);
 
         if (updateError) {
+          captureAppError(updateError, { op: "createInvite_update_code", screen: "link" });
           openAlert({
             title: "Could not update code",
             message: updateError.message,
@@ -169,6 +173,7 @@ export default function LinkPartner() {
       });
 
       if (error) {
+        captureAppError(error, { op: "createInvite_insert", screen: "link" });
         openAlert({
           title: "Could not create code",
           message: error.message,
@@ -246,6 +251,7 @@ export default function LinkPartner() {
         .eq("id", couple.id);
 
       if (updateError) {
+        captureAppError(updateError, { op: "joinPartner_update", screen: "link" });
         openAlert({
           title: "Could not link",
           message: updateError.message,
@@ -255,11 +261,15 @@ export default function LinkPartner() {
 
       const userIds = [String(couple.user1), String(user.id)];
 
-      await supabase
+      const { error: relinkError } = await supabase
         .from("swipes")
         .update({ couple_id: couple.id })
         .in("user_id", userIds)
         .is("couple_id", null);
+
+      if (relinkError) {
+        captureAppError(relinkError, { op: "joinPartner_swipes_relink", screen: "link" });
+      }
 
       const { data: swipeData, error: swipeError } = await supabase
         .from("swipes")
@@ -268,7 +278,7 @@ export default function LinkPartner() {
         .eq("liked", true);
 
       if (swipeError) {
-        console.log(swipeError);
+        captureAppError(swipeError, { op: "joinPartner_swipes", screen: "link" });
       } else if (swipeData) {
         const likedByDate = new Map<string, Set<string>>();
 

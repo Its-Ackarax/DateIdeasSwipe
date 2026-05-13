@@ -3,6 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "expo-linear-gradient";
 import { useCallback, useState } from "react";
 import { supabase } from "../../../lib/supabase";
+import { captureAppError } from "../../../lib/captureAppError";
 import { router, useFocusEffect } from "expo-router";
 import ConfirmDialog from "../../../components/ConfirmDialog";
 
@@ -23,63 +24,66 @@ export default function Profile() {
 
   const loadProfile = useCallback(async () => {
     setLoading(true);
-    const { data: userData } = await supabase.auth.getUser();
-    const user = userData.user;
-    if (!user) {
-      setLoading(false);
-      return;
-    }
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      const user = userData.user;
+      if (!user) {
+        return;
+      }
 
-    setUserEmail(user.email ?? null);
+      setUserEmail(user.email ?? null);
 
-    // find couple record
-    const { data: couple } = await supabase
-      .from("couples")
-      .select("*")
-      .or(`user1.eq.${user.id},user2.eq.${user.id}`)
-      .single();
+      // find couple record
+      const { data: couple } = await supabase
+        .from("couples")
+        .select("*")
+        .or(`user1.eq.${user.id},user2.eq.${user.id}`)
+        .single();
 
-    if (couple) {
-      setCoupleId(couple.id);
+      if (couple) {
+        setCoupleId(couple.id);
 
-      const partnerId =
-        couple.user1 === user.id ? couple.user2 : couple.user1;
+        const partnerId =
+          couple.user1 === user.id ? couple.user2 : couple.user1;
 
-      if (partnerId) {
-        // fetch partner email
-        const { data: partnerUser } = await supabase.auth.admin.getUserById(
-          partnerId
-        );
+        if (partnerId) {
+          // fetch partner email
+          const { data: partnerUser } = await supabase.auth.admin.getUserById(
+            partnerId
+          );
 
-        setPartner(partnerUser.user?.email ?? "Linked");
+          setPartner(partnerUser.user?.email ?? "Linked");
+        } else {
+          setPartner(null);
+        }
       } else {
         setPartner(null);
+        setCoupleId(null);
       }
-    } else {
-      setPartner(null);
-      setCoupleId(null);
-    }
 
-    const { count: likesTotal } = await supabase
-      .from("swipes")
-      .select("*", { count: "exact", head: true })
-      .eq("user_id", user.id)
-      .eq("liked", true);
-
-    setLikesCount(likesTotal ?? 0);
-
-    if (couple?.id) {
-      const { count: matchesTotal } = await supabase
-        .from("matches")
+      const { count: likesTotal } = await supabase
+        .from("swipes")
         .select("*", { count: "exact", head: true })
-        .eq("couple_id", couple.id);
+        .eq("user_id", user.id)
+        .eq("liked", true);
 
-      setMatchesCount(matchesTotal ?? 0);
-    } else {
-      setMatchesCount(0);
+      setLikesCount(likesTotal ?? 0);
+
+      if (couple?.id) {
+        const { count: matchesTotal } = await supabase
+          .from("matches")
+          .select("*", { count: "exact", head: true })
+          .eq("couple_id", couple.id);
+
+        setMatchesCount(matchesTotal ?? 0);
+      } else {
+        setMatchesCount(0);
+      }
+    } catch (error) {
+      captureAppError(error, { op: "loadProfile", screen: "profile" });
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   }, []);
 
   useFocusEffect(
@@ -94,7 +98,11 @@ export default function Profile() {
     if (unlinking) return;
     setUnlinking(true);
     try {
-      await supabase.from("couples").delete().eq("id", coupleId);
+      const { error } = await supabase.from("couples").delete().eq("id", coupleId);
+      if (error) {
+        captureAppError(error, { op: "unlinkPartner", screen: "profile", coupleId });
+        return;
+      }
       setPartner(null);
       setCoupleId(null);
       setUnlinkDialogVisible(false);
@@ -166,6 +174,8 @@ export default function Profile() {
       setResetDialogVisible(false);
       setResetDoneVisible(true);
       loadProfile();
+    } catch (error) {
+      captureAppError(error, { op: "resetSwipes", screen: "profile" });
     } finally {
       setResetting(false);
     }
@@ -175,7 +185,8 @@ export default function Profile() {
     if (loggingOut) return;
     setLoggingOut(true);
     try {
-      await supabase.auth.signOut();
+      const { error } = await supabase.auth.signOut();
+      if (error) captureAppError(error, { op: "signOut", screen: "profile" });
       setLogoutDialogVisible(false);
       router.replace("/auth/login");
     } finally {

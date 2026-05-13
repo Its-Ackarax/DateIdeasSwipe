@@ -19,6 +19,7 @@ import {
 import Svg, { Path } from "react-native-svg";
 import BrandStatusBar from "../../components/BrandStatusBar";
 import DateCard from "../../components/DateCard";
+import { captureAppError } from "../../lib/captureAppError";
 import { supabase } from "../../lib/supabase";
 import { getDateIdeas } from "../../services/getDateIdeas";
 import { useLikes } from "../../store/LikesContext";
@@ -204,7 +205,7 @@ export default function LikesScreen() {
       try {
         dateIdeas = await getDateIdeas();
       } catch (error) {
-        console.log(error);
+        captureAppError(error, { op: "loadLikes_getDateIdeas", screen: "likes" });
       }
 
       // 1️⃣ get user's likes
@@ -269,7 +270,7 @@ export default function LikesScreen() {
         .maybeSingle();
 
       if (coupleError) {
-        console.log(coupleError);
+        captureAppError(coupleError, { op: "loadLikes_couples", screen: "likes" });
         setWarningMessage("Likes may be incomplete right now. Please try again.");
         setLikes(mergedLikedDates);
         return;
@@ -295,7 +296,7 @@ export default function LikesScreen() {
         .eq("couple_id", couple.id);
 
       if (matchError) {
-        console.log(matchError);
+        captureAppError(matchError, { op: "loadLikes_matches", screen: "likes" });
         setWarningMessage("Matches are unavailable right now. Showing likes only.");
         setLikes(mergedLikedDates);
         return;
@@ -341,7 +342,7 @@ export default function LikesScreen() {
 
       setLikes(likedDates);
     } catch (error) {
-      console.log(error);
+      captureAppError(error, { op: "loadLikes", screen: "likes" });
       setWarningMessage("Could not refresh likes. Pull to retry.");
       setLikes(mergeUniqueLikes(liveLikes));
     } finally {

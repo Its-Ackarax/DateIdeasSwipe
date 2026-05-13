@@ -17,6 +17,8 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import useAndroidNavigationBar from "../../hooks/useAndroidNavigationBar";
+import { captureAppError } from "../../lib/captureAppError";
+
 const SUPPORT_EMAIL = "dateswipersupport@gmail.com";
 const SUPPORT_X_URL = "https://x.com/DeanRigneyDev";
 
@@ -75,7 +77,8 @@ export default function SupportScreen() {
         return;
       }
       await Linking.openURL(mailto);
-    } catch {
+    } catch (error) {
+      captureAppError(error, { op: "support_sendEmail", screen: "support" });
       Alert.alert("Couldn't open email", `Please email us at ${SUPPORT_EMAIL}.`);
     }
   }, [message, topic]);
@@ -90,7 +93,8 @@ export default function SupportScreen() {
     const payload = `Topic: ${topic}\n\n${trimmed}`;
     try {
       await Clipboard.setStringAsync(payload);
-    } catch {
+    } catch (error) {
+      captureAppError(error, { op: "support_clipboard", screen: "support" });
       Alert.alert("Couldn't copy", "Copy your message manually, then DM @DeanRigneyDev on X.");
       return;
     }
@@ -102,7 +106,8 @@ export default function SupportScreen() {
         return;
       }
       await Linking.openURL(SUPPORT_X_URL);
-    } catch {
+    } catch (error) {
+      captureAppError(error, { op: "support_openX", screen: "support" });
       Alert.alert("Can't open X", "Your message was copied. DM @DeanRigneyDev on X.");
     }
   }, [message, topic]);

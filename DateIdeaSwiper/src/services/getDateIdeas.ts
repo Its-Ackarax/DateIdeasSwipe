@@ -1,3 +1,4 @@
+import { captureAppError } from "../lib/captureAppError";
 import { supabase } from "../lib/supabase";
 import type { DateIdea } from "../types/date";
 import localDates from "../app/data/dates";
@@ -35,7 +36,7 @@ export async function getDateIdeas(): Promise<DateIdea[]> {
       };
     });
   } catch (error) {
-    console.log("getDateIdeas failed, using local data", error);
+    captureAppError(error, { op: "getDateIdeas" });
     return localDates as DateIdea[];
   }
 }

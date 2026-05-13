@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import RevenueCatUI from "react-native-purchases-ui";
+import { captureAppError } from "../lib/captureAppError";
 import { PRO_ENTITLEMENT_ID } from "../lib/revenuecat";
 import { usePro } from "../store/ProContext";
 
@@ -21,8 +22,13 @@ export default function PaywallScreen() {
         requiredEntitlementIdentifier: PRO_ENTITLEMENT_ID,
       });
       if (router.canGoBack()) router.back();
-    } catch (e: any) {
-      setErrorMessage(e?.message ? String(e.message) : "Couldn’t open the paywall.");
+    } catch (e: unknown) {
+      captureAppError(e, { op: "presentPaywallIfNeeded", screen: "paywall" });
+      setErrorMessage(
+        e && typeof e === "object" && "message" in e && typeof (e as { message: unknown }).message === "string"
+          ? String((e as { message: string }).message)
+          : "Couldn't open the paywall."
+      );
     } finally {
       setPresenting(false);
     }
@@ -32,8 +38,13 @@ export default function PaywallScreen() {
     setErrorMessage(null);
     try {
       await RevenueCatUI.presentCustomerCenter();
-    } catch (e: any) {
-      setErrorMessage(e?.message ? String(e.message) : "Couldn’t open Customer Center.");
+    } catch (e: unknown) {
+      captureAppError(e, { op: "presentCustomerCenter", screen: "paywall" });
+      setErrorMessage(
+        e && typeof e === "object" && "message" in e && typeof (e as { message: unknown }).message === "string"
+          ? String((e as { message: string }).message)
+          : "Couldn't open Customer Center."
+      );
     }
   }, []);
 
