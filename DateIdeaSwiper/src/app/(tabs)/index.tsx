@@ -19,6 +19,7 @@ import BrandStatusBar from "../../components/BrandStatusBar";
 
 import DateCard from "../../components/DateCard";
 import { captureAppError } from "../../lib/captureAppError";
+import { REVENUECAT_PAYWALL_ENABLED } from "../../lib/revenuecat";
 import { supabase } from "../../lib/supabase";
 import { useLikes } from "../../store/LikesContext";
 import { usePro } from "../../store/ProContext";
@@ -166,7 +167,7 @@ export default function Home() {
       const user = data.user;
       if (!user) return;
 
-      if (!isPro && seenIds.length >= 10) {
+      if (REVENUECAT_PAYWALL_ENABLED && !isPro && seenIds.length >= 10) {
         router.push("/paywall");
         return;
       }

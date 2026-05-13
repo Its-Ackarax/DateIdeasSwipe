@@ -14,6 +14,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { markOnboardingComplete } from "../../lib/onboarding";
 import { supabase } from "../../lib/supabase";
 import ConfirmDialog from "../../components/ConfirmDialog";
 
@@ -43,7 +44,8 @@ export default function Login() {
       return;
     }
 
-    router.replace("/");
+    await markOnboardingComplete();
+    router.replace("/(tabs)");
     setLoginLoading(false);
   }
 

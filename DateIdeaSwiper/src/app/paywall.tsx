@@ -5,7 +5,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-nati
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import RevenueCatUI from "react-native-purchases-ui";
 import { captureAppError } from "../lib/captureAppError";
-import { PRO_ENTITLEMENT_ID } from "../lib/revenuecat";
+import { PRO_ENTITLEMENT_ID, REVENUECAT_PAYWALL_ENABLED } from "../lib/revenuecat";
 import { usePro } from "../store/ProContext";
 
 export default function PaywallScreen() {
@@ -15,6 +15,7 @@ export default function PaywallScreen() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const presentPaywall = useCallback(async () => {
+    if (!REVENUECAT_PAYWALL_ENABLED) return;
     setPresenting(true);
     setErrorMessage(null);
     try {
@@ -35,6 +36,7 @@ export default function PaywallScreen() {
   }, []);
 
   const openCustomerCenter = useCallback(async () => {
+    if (!REVENUECAT_PAYWALL_ENABLED) return;
     setErrorMessage(null);
     try {
       await RevenueCatUI.presentCustomerCenter();
@@ -49,6 +51,11 @@ export default function PaywallScreen() {
   }, []);
 
   useEffect(() => {
+    if (!REVENUECAT_PAYWALL_ENABLED) {
+      if (router.canGoBack()) router.back();
+      else router.replace("/(tabs)");
+      return;
+    }
     if (isPro) {
       if (router.canGoBack()) router.back();
       return;

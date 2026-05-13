@@ -4,7 +4,8 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useCallback, useState } from "react";
 import { supabase } from "../../../lib/supabase";
 import { captureAppError } from "../../../lib/captureAppError";
-import { router, useFocusEffect } from "expo-router";
+import { clearOnboardingComplete } from "../../../lib/onboarding";
+import { type Href, router, useFocusEffect } from "expo-router";
 import ConfirmDialog from "../../../components/ConfirmDialog";
 
 export default function Profile() {
@@ -188,7 +189,8 @@ export default function Profile() {
       const { error } = await supabase.auth.signOut();
       if (error) captureAppError(error, { op: "signOut", screen: "profile" });
       setLogoutDialogVisible(false);
-      router.replace("/auth/login");
+      await clearOnboardingComplete();
+      router.replace("/onboarding" as Href);
     } finally {
       setLoggingOut(false);
     }
