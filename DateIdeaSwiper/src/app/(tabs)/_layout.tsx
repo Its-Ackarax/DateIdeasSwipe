@@ -1,6 +1,9 @@
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
+/** MVP: hide Likes tab; screen file stays for a future release. Set `true` to show again. */
+const LIKES_TAB_ENABLED = false;
+
 export default function TabLayout() {
     return (
       <Tabs screenOptions={{ 
@@ -22,6 +25,7 @@ export default function TabLayout() {
           name="likes"
           options={{
             title: "Likes",
+            ...(LIKES_TAB_ENABLED ? {} : { href: null }),
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="heart" size={size} color={color} />
             ),

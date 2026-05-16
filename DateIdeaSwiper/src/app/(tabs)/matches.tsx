@@ -325,7 +325,7 @@ export default function Matches() {
                 <Text style={styles.stepBadgeText}>2</Text>
               </View>
               <Text style={styles.stepText}>
-                Keep swiping on the home tab — likes are saved for both of you.
+                Keep swiping on the home tab - likes are saved for both of you.
               </Text>
             </View>
             <View style={styles.stepRow}>
@@ -349,8 +349,8 @@ export default function Matches() {
           </Pressable>
 
           <Text style={styles.noPartnerHint}>
-            You can still browse and like dates before linking — your likes stay on the Likes
-            tab.
+            You can still browse and like dates before linking - your likes are saved and count
+            toward matches once you link.
           </Text>
         </ScrollView>
       </LinearGradient>
@@ -385,7 +385,7 @@ export default function Matches() {
         </View>
         {sections.length === 0 ? (
           <Text style={styles.emptyText}>
-            No matches yet — like some dates to get started!
+            No matches yet - like some dates to get started!
           </Text>
         ) : (
           sections.map((section) => {

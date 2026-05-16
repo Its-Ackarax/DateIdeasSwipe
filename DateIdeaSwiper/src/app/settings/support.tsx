@@ -26,15 +26,15 @@ type SupportTopic = "Account" | "Linking" | "Bug" | "Billing" | "Other";
 
 const MESSAGE_PLACEHOLDER: Record<SupportTopic, string> = {
   Account:
-    "E.g. can’t sign in, wrong email on file, or need help with your account — include the email you use and what happens when you try.",
+    "E.g. can’t sign in, wrong email on file, or need help with your account - include the email you use and what happens when you try.",
   Linking:
-    "E.g. invite code not working, partner already linked, or you need help unlinking — include both partners’ situations and any error text.",
+    "E.g. invite code not working, partner already linked, or you need help unlinking - include both partners’ situations and any error text.",
   Bug:
-    "E.g. what screen you’re on, what you tapped, what you expected vs what happened — steps to reproduce help a lot.",
+    "E.g. what screen you’re on, what you tapped, what you expected vs what happened - steps to reproduce help a lot.",
   Billing:
-    "E.g. subscription question, charge you don’t recognize, or restore purchases — say whether you’re on iOS or Android.",
+    "E.g. subscription question, charge you don’t recognize, or restore purchases - say whether you’re on iOS or Android.",
   Other:
-    "Describe what you need — the more detail (and any error messages), the faster we can help.",
+    "Describe what you need - the more detail (and any error messages), the faster we can help.",
 };
 
 export default function SupportScreen() {
@@ -67,19 +67,22 @@ export default function SupportScreen() {
       subject
     )}&body=${encodeURIComponent(body)}`;
 
+    // Avoid canOpenURL(mailto) — it often returns false on Android/iOS even when a mail app exists.
     try {
-      const canOpen = await Linking.canOpenURL(mailto);
-      if (!canOpen) {
-        Alert.alert(
-          "Email not available",
-          `This device can't open email. Please email us at ${SUPPORT_EMAIL}.`
-        );
-        return;
-      }
       await Linking.openURL(mailto);
     } catch (error) {
       captureAppError(error, { op: "support_sendEmail", screen: "support" });
-      Alert.alert("Couldn't open email", `Please email us at ${SUPPORT_EMAIL}.`);
+      try {
+        await Clipboard.setStringAsync(
+          `To: ${SUPPORT_EMAIL}\nSubject: ${subject}\n\n${body}`
+        );
+      } catch {
+        /* ignore */
+      }
+      Alert.alert(
+        "Couldn't open email",
+        `Your draft was copied. Paste it into any email app, or write us at ${SUPPORT_EMAIL}.`
+      );
     }
   }, [message, topic]);
 
@@ -99,12 +102,9 @@ export default function SupportScreen() {
       return;
     }
 
+    // Don't use canOpenURL for https:// — it often returns false on Android (queries intent)
+    // and iOS (LSApplicationQueriesSchemes) even though the browser can open the link.
     try {
-      const canOpen = await Linking.canOpenURL(SUPPORT_X_URL);
-      if (!canOpen) {
-        Alert.alert("Can't open X", "Your message was copied. DM @DeanRigneyDev on X.");
-        return;
-      }
       await Linking.openURL(SUPPORT_X_URL);
     } catch (error) {
       captureAppError(error, { op: "support_openX", screen: "support" });

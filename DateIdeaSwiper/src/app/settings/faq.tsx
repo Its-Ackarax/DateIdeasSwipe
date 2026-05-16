@@ -14,7 +14,7 @@ export default function FAQScreen() {
     () => [
       {
         q: "How does swiping work?",
-        a: "Swipe right to like a date idea. Swipe left to pass. The 'Likes' tab keeps a list all dates that you liked.",
+        a: "Swipe right to like a date idea. Swipe left to pass. Your likes are saved and count toward matches when you link with a partner.",
       },
       {
         q: "How do matches happen?",

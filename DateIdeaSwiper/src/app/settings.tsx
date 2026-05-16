@@ -1,19 +1,45 @@
 import * as Sentry from "@sentry/react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { captureAppError } from "../lib/captureAppError";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Linking from "expo-linking";
-import { router } from "expo-router";
-import { useCallback } from "react";
+import { type Href, router } from "expo-router";
+import { useCallback, useState } from "react";
 import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import ConfirmDialog from "../components/ConfirmDialog";
 import SettingsRow from "../components/SettingsRow";
 import useAndroidNavigationBar from "../hooks/useAndroidNavigationBar";
+import { clearOnboardingComplete } from "../lib/onboarding";
+import { logOutRevenueCat } from "../lib/revenuecat";
+import { supabase } from "../lib/supabase";
 
-const PRIVACY_URL = "https://example.com/privacy-policy";
-const TERMS_URL = "https://example.com/terms-of-service";
+const PRIVACY_URL =
+  "https://alder-roll-513.notion.site/Privacy-Policy-DateSwiper-dddf270e64b94b0fb4d17189a9720ec0?source=copy_link";
+
+function deleteAccountRpcUserMessage(serverMessage: string): string {
+  const m = serverMessage.toLowerCase();
+  if (
+    m.includes("could not find the function") ||
+    m.includes("schema cache") ||
+    m.includes("42883")
+  ) {
+    return [
+      "The delete-account database function is not installed on your Supabase project yet.",
+      "",
+      "Fix: Supabase Dashboard → SQL → New query → paste the full contents of:",
+      "supabase/migrations/20260515120000_delete_my_account.sql",
+      "",
+      "Run the query, then try Delete account again.",
+    ].join("\n");
+  }
+  return serverMessage;
+}
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
+  const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
   useAndroidNavigationBar({ backgroundColor: "#fff1f2", buttonStyle: "dark", position: "relative" });
 
   const openUrl = useCallback(async (url: string) => {
@@ -31,16 +57,46 @@ export default function SettingsScreen() {
   }, []);
 
   const confirmDeleteAccount = useCallback(() => {
-    Alert.alert(
-      "Delete account?",
-      "To delete your account please contact support.",
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "OK", style: "default" },
-      ],
-      { cancelable: true }
-    );
+    setDeleteDialogVisible(true);
   }, []);
+
+  const deleteAccount = useCallback(async () => {
+    if (deletingAccount) return;
+    setDeletingAccount(true);
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      const user = userData.user;
+      if (!user) {
+        Alert.alert("Not signed in", "Sign in to delete your account.");
+        setDeleteDialogVisible(false);
+        return;
+      }
+
+      const { error } = await supabase.rpc("delete_my_account");
+      if (error) {
+        captureAppError(error, { op: "delete_my_account", screen: "settings" });
+        const raw = error.message || "Something went wrong. If this keeps happening, contact support.";
+        Alert.alert("Could not delete account", deleteAccountRpcUserMessage(raw));
+        return;
+      }
+
+      await AsyncStorage.removeItem("matchModalDisabled");
+      await supabase.auth.signOut({ scope: "local" });
+      try {
+        await logOutRevenueCat();
+      } catch (rcError) {
+        captureAppError(rcError, { op: "deleteAccount_logOutRevenueCat", screen: "settings" });
+      }
+      await clearOnboardingComplete();
+      setDeleteDialogVisible(false);
+      router.replace("/onboarding" as Href);
+    } catch (err) {
+      captureAppError(err, { op: "deleteAccount", screen: "settings" });
+      Alert.alert("Could not delete account", "Something went wrong. Please try again.");
+    } finally {
+      setDeletingAccount(false);
+    }
+  }, [deletingAccount]);
 
   return (
     <LinearGradient colors={["#fb7185", "#fff1f2", "#fff1f2"]} style={styles.page}>
@@ -101,12 +157,6 @@ export default function SettingsScreen() {
                 icon="document-text-outline"
                 onPress={() => openUrl(PRIVACY_URL)}
               />
-              <SettingsRow
-                title="Terms of Service"
-                subtitle="External link"
-                icon="shield-checkmark-outline"
-                onPress={() => openUrl(TERMS_URL)}
-              />
             </View>
           </View>
 
@@ -115,7 +165,7 @@ export default function SettingsScreen() {
             <View style={styles.stack}>
               <SettingsRow
                 title="Delete Account"
-                subtitle="Requires support confirmation"
+                subtitle="Permanently remove your data and account"
                 icon="trash-outline"
                 danger
                 onPress={confirmDeleteAccount}
@@ -146,6 +196,17 @@ export default function SettingsScreen() {
           </View>
         </ScrollView>
       </View>
+      <ConfirmDialog
+        visible={deleteDialogVisible}
+        title="Delete?"
+        message="This permanently deletes your swipes, matches, and partner link, then removes your sign-in. This cannot be undone."
+        cancelText="Cancel"
+        confirmText="Delete"
+        destructive
+        loading={deletingAccount}
+        onCancel={() => setDeleteDialogVisible(false)}
+        onConfirm={deleteAccount}
+      />
     </LinearGradient>
   );
 }
