@@ -3,21 +3,18 @@ import { Pacifico_400Regular } from "@expo-google-fonts/pacifico";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useFocusEffect } from "expo-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
     ActivityIndicator,
     Animated,
-    Dimensions,
     Modal,
     Pressable,
     StyleSheet,
     Text,
     View,
 } from "react-native";
-import Swiper from "react-native-deck-swiper";
 import BrandStatusBar from "../../components/BrandStatusBar";
-
-import DateCard from "../../components/DateCard";
+import SwipeDeck, { type SwipeDeckHandle } from "../../components/SwipeDeck";
 import { captureAppError } from "../../lib/captureAppError";
 import { REVENUECAT_PAYWALL_ENABLED } from "../../lib/revenuecat";
 import { supabase } from "../../lib/supabase";
@@ -42,14 +39,19 @@ export default function Home() {
   const { addLike } = useLikes();
   const [dates, setDates] = useState<DateIdea[]>([]);
   const [seenIds, setSeenIds] = useState<string[]>([]);
+  const [deckDates, setDeckDates] = useState<DateIdea[]>([]);
   const [userId, setUserId] = useState<string | null>(null);
+  const suppressDeckSyncRef = useRef(false);
+  const swipeDeckRef = useRef<SwipeDeckHandle>(null);
+  const deckDatesRef = useRef(deckDates);
+  const handleSwipeRef = useRef<(date: DateIdea, liked: boolean) => Promise<void>>(async () => {});
+
+  deckDatesRef.current = deckDates;
   const [loading, setLoading] = useState(true);
   const [datesLoading, setDatesLoading] = useState(true);
   const [swiperKey, setSwiperKey] = useState(0);
-  const [swipeFeedback, setSwipeFeedback] = useState<"like" | "pass" | null>(null);
   const [matchVisible, setMatchVisible] = useState(false);
   const [matchToastDisabled, setMatchToastDisabled] = useState(false);
-  const feedbackAnim = useRef(new Animated.Value(0)).current;
   const heartAnimations = useRef(
     [0, 1, 2].map(() => ({
       translateY: new Animated.Value(0),
@@ -82,26 +84,6 @@ export default function Home() {
   );
 
   
-
-  const triggerSwipeFeedback = useCallback((type: "like" | "pass") => {
-    setSwipeFeedback(type);
-    feedbackAnim.setValue(0);
-    Animated.sequence([
-      Animated.timing(feedbackAnim, {
-        toValue: 1,
-        duration: 160,
-        useNativeDriver: true,
-      }),
-      Animated.delay(220),
-      Animated.timing(feedbackAnim, {
-        toValue: 0,
-        duration: 180,
-        useNativeDriver: true,
-      }),
-    ]).start(({ finished }) => {
-      if (finished) setSwipeFeedback(null);
-    });
-  }, [feedbackAnim]);
 
   const loadMatchPreference = useCallback(async () => {
     try {
@@ -159,48 +141,84 @@ export default function Home() {
     ).start();
   }, [heartAnimations]);
 
-  async function handleSwipe(date: DateIdea, liked: boolean) {
-    if (!date) return;
-    try {
-      triggerSwipeFeedback(liked ? "like" : "pass");
-      const { data } = await supabase.auth.getUser();
-      const user = data.user;
-      if (!user) return;
+  const markDateSeen = useCallback((dateId: string) => {
+    setSeenIds((prev) => (prev.includes(dateId) ? prev : [...prev, dateId]));
+  }, []);
 
-      if (REVENUECAT_PAYWALL_ENABLED && !isPro && seenIds.length >= 10) {
-        router.push("/paywall");
-        return;
-      }
+  const handleSwipe = useCallback(
+    async (date: DateIdea, liked: boolean) => {
+      if (!date) return;
+      suppressDeckSyncRef.current = true;
+      const dateId = String(date.id);
+      const feedbackDone =
+        swipeDeckRef.current?.showFeedback(liked ? "like" : "pass") ?? Promise.resolve();
+      try {
+        const { data } = await supabase.auth.getUser();
+        const user = data.user;
+        if (!user) {
+          await feedbackDone;
+          markDateSeen(dateId);
+          return;
+        }
 
-      setSeenIds((prev) => {
-        const id = String(date.id);
-        return prev.includes(id) ? prev : [...prev, id];
-      });
+        if (REVENUECAT_PAYWALL_ENABLED && !isPro && seenIds.length >= 10) {
+          await feedbackDone;
+          markDateSeen(dateId);
+          router.push("/paywall");
+          return;
+        }
 
-      await saveSwipe(user.id, date.id, liked);
+        const savePromise = saveSwipe(user.id, date.id, liked);
 
-      if (liked) {
-        addLike(date); // keep local likes page working
+        await feedbackDone;
 
-        const coupleId = await getCoupleId(user.id);
-        if (!coupleId) return;
+        let showMatchModal = false;
+        if (liked) {
+          addLike(date);
 
-        const matched = await checkMatch(coupleId, date.id);
-
-        if (matched) {
-          triggerMatchHearts();
-          if (!matchToastDisabled) {
-            openMatchModal();
-            setTimeout(() => {
-              setSwiperKey((prev) => prev + 1);
-            }, 0);
+          const coupleId = await getCoupleId(user.id);
+          if (coupleId) {
+            const matched = await checkMatch(coupleId, date.id);
+            if (matched) {
+              triggerMatchHearts();
+              showMatchModal = !matchToastDisabled;
+            }
           }
         }
+
+        await savePromise;
+        markDateSeen(dateId);
+        if (showMatchModal) {
+          openMatchModal();
+        }
+      } catch (error) {
+        captureAppError(error, { op: "handleSwipe", dateId, liked });
+        await feedbackDone;
+        markDateSeen(dateId);
       }
-    } catch (error) {
-      captureAppError(error, { op: "handleSwipe", dateId: String(date.id), liked });
-    }
-  }
+    },
+    [
+      addLike,
+      isPro,
+      markDateSeen,
+      matchToastDisabled,
+      openMatchModal,
+      seenIds.length,
+      triggerMatchHearts,
+    ]
+  );
+
+  handleSwipeRef.current = handleSwipe;
+
+  const onSwipedRight = useCallback((index: number) => {
+    const card = deckDatesRef.current[index];
+    if (card) void handleSwipeRef.current(card, true);
+  }, []);
+
+  const onSwipedLeft = useCallback((index: number) => {
+    const card = deckDatesRef.current[index];
+    if (card) void handleSwipeRef.current(card, false);
+  }, []);
   const loadSeen = useCallback(async () => {
     try {
       const { data: userData, error: userError } = await supabase.auth.getUser();
@@ -247,17 +265,26 @@ export default function Home() {
 
   useFocusEffect(
     useCallback(() => {
+      suppressDeckSyncRef.current = false;
       setLoading(true);
       loadSeen();
     }, [loadSeen])
   );
 
   const todayKey = new Date().toISOString().slice(0, 10); // UTC day key
-  const filteredDates = useMemo(() => dates.filter((d) => !seenIds.includes(d.id)), [dates, seenIds]);
-  const deckDates = useMemo(() => {
-    if (!userId) return filteredDates;
-    return dailySeededOrder(filteredDates, `${userId}:${todayKey}`);
-  }, [filteredDates, userId, todayKey]);
+
+  const buildDeck = useCallback(() => {
+    const filtered = dates.filter((d) => !seenIds.includes(d.id));
+    if (!userId) return filtered;
+    return dailySeededOrder(filtered, `${userId}:${todayKey}`);
+  }, [dates, seenIds, userId, todayKey]);
+
+  // Rebuild the swiper deck when loading from the server — not after each swipe (swiper advances on its own).
+  useEffect(() => {
+    if (suppressDeckSyncRef.current) return;
+    if (loading || datesLoading || !userId || dates.length === 0) return;
+    setDeckDates(buildDeck());
+  }, [buildDeck, loading, datesLoading, userId, dates.length]);
 
   if (!fontsLoaded || loading || datesLoading) {
     return <ActivityIndicator size="large" style={{ flex: 1 }} />;
@@ -294,65 +321,32 @@ export default function Home() {
           </Text>
         </View>
       </View>
-      <View style={styles.swiperWrap}>
+      <View
+        style={styles.swiperWrap}
+        pointerEvents={matchVisible ? "none" : "auto"}
+      >
         <LinearGradient
           colors={["#ff0033", "rgba(255, 255, 255, 0)", "#00f56a"]}
           locations={[0, 0.5, 1]}
           start={{ x: 0, y: 0.5 }}
           end={{ x: 1, y: 0.5 }}
           style={styles.gradientHint}
+          pointerEvents="none"
         />
-        <Text style={[styles.sideHintText, styles.sideHintTextLeft]}>PASS</Text>
-        <Text style={[styles.sideHintText, styles.sideHintTextRight]}>LIKE</Text>
-        {swipeFeedback ? (
-          <Animated.View
-            pointerEvents="none"
-            style={[
-              styles.swipeFeedback,
-              swipeFeedback === "like"
-                ? styles.swipeFeedbackLike
-                : styles.swipeFeedbackPass,
-              {
-                opacity: feedbackAnim,
-                transform: [
-                  {
-                    scale: feedbackAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [0.92, 1],
-                    }),
-                  },
-                ],
-              },
-            ]}
-          >
-            <Text
-              style={[
-                styles.swipeFeedbackText,
-                swipeFeedback === "like"
-                  ? styles.swipeFeedbackTextLike
-                  : styles.swipeFeedbackTextPass,
-              ]}
-            >
-              {swipeFeedback === "like" ? "✔" : "✕"}
-            </Text>
-          </Animated.View>
-        ) : null}
-        <Swiper
-          key={`swiper-${swiperKey}-${deckDates.length}`}
-          cards={deckDates}
-          renderCard={(card) => <DateCard item={card} />}
-          onSwipedRight={(i) => {
-            handleSwipe(deckDates[i], true);
-          }}
-          onSwipedLeft={(i) => {
-            handleSwipe(deckDates[i], false);
-          }}
-          stackSize={3}
-          backgroundColor="transparent"
-          cardVerticalMargin={12}
-          cardHorizontalMargin={0}
-          cardStyle={styles.cardStyle}
-        />
+        {deckDates.length > 0 ? (
+          <SwipeDeck
+            ref={swipeDeckRef}
+            deckDates={deckDates}
+            swiperKey={swiperKey}
+            onSwipedRight={onSwipedRight}
+            onSwipedLeft={onSwipedLeft}
+          />
+        ) : (
+          <View style={styles.deckEmpty}>
+            <Text style={styles.deckEmptyTitle}>You&apos;re all caught up</Text>
+            <Text style={styles.deckEmptyText}>Check back tomorrow for fresh date ideas.</Text>
+          </View>
+        )}
       </View>
       <View pointerEvents="none" style={styles.matchHeartsWrap}>
         {heartAnimations.map((anim, index) => (
@@ -375,13 +369,10 @@ export default function Home() {
         visible={matchVisible}
         animationType="fade"
         transparent
-        onRequestClose={() => setMatchVisible(false)}
+        onRequestClose={() => {}}
       >
         <View style={styles.matchBackdrop}>
-          <Pressable
-            style={styles.matchBackdropPress}
-            onPress={() => setMatchVisible(false)}
-          />
+          <View style={styles.matchBackdropBlocker} />
           <View style={styles.matchCard}>
             <View style={styles.matchIconWrap}>
               <Text style={styles.matchIcon}>❤</Text>
@@ -424,8 +415,6 @@ export default function Home() {
     </LinearGradient>
   );
 }
-
-const CARD_WIDTH = Math.round(Dimensions.get("window").width * 0.88);
 
 const styles = StyleSheet.create({
   page: {
@@ -510,12 +499,26 @@ const styles = StyleSheet.create({
     width: "100%",
     marginTop: 10,
     position: "relative",
+    overflow: "hidden",
   },
-  cardStyle: {
-    width: CARD_WIDTH,
-    alignSelf: "center",
-    marginLeft: (Dimensions.get("window").width - CARD_WIDTH) / 2,
-    marginBottom: 28,
+  deckEmpty: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 28,
+  },
+  deckEmptyTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#881337",
+    textAlign: "center",
+    marginBottom: 8,
+  },
+  deckEmptyText: {
+    fontSize: 15,
+    color: "#9f1239",
+    textAlign: "center",
+    lineHeight: 22,
   },
   gradientHint: {
     position: "absolute",
@@ -528,57 +531,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#ffffff",
     zIndex: 0,
+    elevation: 0,
     marginTop: -160,
-  },
-  sideHintText: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#000000",
-    letterSpacing: 0.8,
-    transform: [{ rotate: "-90deg" }],
-  },
-  sideHintTextLeft: {
-    position: "absolute",
-    top: "50%",
-    left: 18,
-    marginTop: -20,
-    zIndex: 1,
-  },
-  sideHintTextRight: {
-    position: "absolute",
-    top: "50%",
-    right: 18,
-    marginTop: -20,
-    zIndex: 1,
-  },
-  swipeFeedback: {
-    position: "absolute",
-    top: 22,
-    alignSelf: "center",
-    paddingHorizontal: 18,
-    paddingVertical: 8,
-    borderRadius: 999,
-    zIndex: 2,
-    borderWidth: 1,
-    backgroundColor: "rgba(255, 255, 255, 0.95)",
-  },
-  swipeFeedbackLike: {
-    borderColor: "rgba(34, 197, 94, 0.35)",
-  },
-  swipeFeedbackPass: {
-    borderColor: "rgba(239, 68, 68, 0.35)",
-  },
-  swipeFeedbackText: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#0f172a",
-    letterSpacing: 1,
-  },
-  swipeFeedbackTextLike: {
-    color: "#16a34a",
-  },
-  swipeFeedbackTextPass: {
-    color: "#dc2626",
   },
   matchBackdrop: {
     flex: 1,
@@ -587,7 +541,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     padding: 24,
   },
-  matchBackdropPress: {
+  matchBackdropBlocker: {
     ...StyleSheet.absoluteFillObject,
   },
   matchCard: {

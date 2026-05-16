@@ -27,6 +27,18 @@ type AlertState = {
   confirmPink?: boolean;
 };
 
+type CoupleInviteRow = {
+  id: string;
+  user1: string;
+  user2: string | null;
+  code: string;
+};
+
+function firstRpcRow<T>(data: T | T[] | null | undefined): T | null {
+  if (data == null) return null;
+  return Array.isArray(data) ? (data[0] ?? null) : data;
+}
+
 export default function LinkPartner() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -211,51 +223,54 @@ export default function LinkPartner() {
         return;
       }
 
-      const { data: couple, error } = await supabase
-        .from("couples")
-        .select("*")
-        .eq("code", trimmed)
-        .single();
+      const { data: joinedRows, error: joinError } = await supabase.rpc("join_couple_by_code", {
+        invite_code: trimmed,
+      });
 
-      if (error || !couple) {
-        openAlert({
-          title: "Invalid code",
-          message: "We could not find a couple with that code. Check for typos and try again.",
-          confirmPink: true,
-        });
-        return;
-      }
-
-      if (couple.user2 !== null) {
-        openAlert({
-          title: "Code already used",
-          message: "This invite has already been claimed. Ask your partner for a new code.",
-          confirmPink: true,
-        });
-        return;
-      }
-
-      if (String(couple.user1) === String(user.id)) {
-        openAlert({
-          title: "That is your invite",
-          message:
-            "You created this code. Send it to your partner so they can enter it on their account to link with you.",
-          confirmPink: true,
-        });
-        return;
-      }
-
-      const { error: updateError } = await supabase
-        .from("couples")
-        .update({ user2: user.id })
-        .eq("id", couple.id);
-
-      if (updateError) {
-        captureAppError(updateError, { op: "joinPartner_update", screen: "link" });
+      if (joinError) {
+        captureAppError(joinError, { op: "joinPartner_rpc", screen: "link" });
         openAlert({
           title: "Could not link",
-          message: updateError.message,
+          message: joinError.message,
         });
+        return;
+      }
+
+      const couple = firstRpcRow<CoupleInviteRow>(joinedRows);
+
+      if (!couple?.user2) {
+        const { data: inviteRows } = await supabase.rpc("get_couple_invite_by_code", {
+          invite_code: trimmed,
+        });
+        const invite = firstRpcRow<CoupleInviteRow>(inviteRows);
+
+        if (!invite) {
+          openAlert({
+            title: "Invalid code",
+            message: "We could not find a couple with that code. Check for typos and try again.",
+            confirmPink: true,
+          });
+        } else if (invite.user2 !== null) {
+          openAlert({
+            title: "Code already used",
+            message: "This invite has already been claimed. Ask your partner for a new code.",
+            confirmPink: true,
+          });
+        } else if (String(invite.user1) === String(user.id)) {
+          openAlert({
+            title: "That is your invite",
+            message:
+              "You created this code. Send it to your partner so they can enter it on their account to link with you.",
+            confirmPink: true,
+          });
+        } else {
+          openAlert({
+            title: "Could not link",
+            message:
+              "Linking failed. Run the latest Supabase migration (join_couple_by_code) and try again.",
+            confirmPink: true,
+          });
+        }
         return;
       }
 

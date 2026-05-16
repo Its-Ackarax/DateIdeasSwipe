@@ -48,12 +48,7 @@ export default function Profile() {
           couple.user1 === user.id ? couple.user2 : couple.user1;
 
         if (partnerId) {
-          // fetch partner email
-          const { data: partnerUser } = await supabase.auth.admin.getUserById(
-            partnerId
-          );
-
-          setPartner(partnerUser.user?.email ?? "Linked");
+          setPartner("Linked");
         } else {
           setPartner(null);
         }
