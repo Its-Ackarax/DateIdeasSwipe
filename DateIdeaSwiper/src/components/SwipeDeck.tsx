@@ -2,16 +2,48 @@ import {
   forwardRef,
   memo,
   useCallback,
+  useEffect,
   useImperativeHandle,
+  useLayoutEffect,
   useMemo,
   useRef,
+  useState,
 } from "react";
-import { Animated, Dimensions, StyleSheet, Text, View } from "react-native";
-import Swiper from "react-native-deck-swiper";
+import {
+  Animated,
+  Dimensions,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import Reanimated, {
+  cancelAnimation,
+  Extrapolation,
+  interpolate,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from "react-native-reanimated";
+import {
+  CARD_LEFT,
+  CARD_TOP_OFFSET,
+  CARD_WIDTH,
+} from "../constants/cardLayout";
 import DateCard from "./DateCard";
 import type { DateIdea } from "../types/date";
+import {
+  prefetchDateImageUrls,
+  prefetchUpcomingFromDeck,
+} from "../utils/prefetchDateImages";
 
-const CARD_WIDTH = Math.round(Dimensions.get("window").width * 0.88);
+const WINDOW_WIDTH = Dimensions.get("window").width;
+const SWIPE_THRESHOLD = WINDOW_WIDTH * 0.25;
+const SWIPE_VELOCITY_THRESHOLD = 800;
+const SWIPE_OFF_DURATION_MS = 260;
+const PREFETCH_ON_DRAG_PX = 40;
 
 export type SwipeDeckHandle = {
   resetTopCard: () => void;
@@ -29,14 +61,152 @@ const SwipeDeck = forwardRef<SwipeDeckHandle, SwipeDeckProps>(function SwipeDeck
   { deckDates, swiperKey, onSwipedRight, onSwipedLeft },
   ref
 ) {
-  const swiperRef = useRef<InstanceType<typeof Swiper> | null>(null);
+  const [headIndex, setHeadIndex] = useState(0);
+  const headIndexRef = useRef(0);
+  const panTranslateX = useSharedValue(0);
+  const panTranslateY = useSharedValue(0);
+  const isSwipeLocked = useSharedValue(false);
+  const gesturePrefetchDone = useSharedValue(0);
   const feedbackLikeOpacity = useRef(new Animated.Value(0)).current;
   const feedbackPassOpacity = useRef(new Animated.Value(0)).current;
 
-  const resetTopCard = useCallback(() => {
-    const swiper = swiperRef.current as { resetPanAndScale?: () => void } | null;
-    swiper?.resetPanAndScale?.();
+  const cards = useMemo(
+    () => deckDates.filter((card): card is DateIdea => card != null && card.id != null),
+    [deckDates]
+  );
+
+  const cardsRef = useRef(cards);
+  cardsRef.current = cards;
+
+  const firstCardId = cards[0]?.id;
+  const currentCard = cards[headIndex];
+  const nextCard = cards[headIndex + 1];
+
+  headIndexRef.current = headIndex;
+
+  const completeSwipe = useCallback(
+    (toRight: boolean) => {
+      const index = headIndexRef.current;
+      setHeadIndex((prev) => prev + 1);
+      if (toRight) onSwipedRight(index);
+      else onSwipedLeft(index);
+    },
+    [onSwipedLeft, onSwipedRight]
+  );
+
+  const completeSwipeRef = useRef(completeSwipe);
+  completeSwipeRef.current = completeSwipe;
+
+  const runCompleteSwipe = useCallback((toRight: boolean) => {
+    completeSwipeRef.current(toRight);
   }, []);
+
+  const prefetchUpcoming = useCallback(() => {
+    prefetchUpcomingFromDeck(cardsRef.current, headIndexRef.current, 3);
+  }, []);
+
+  const prefetchUpcomingRef = useRef(prefetchUpcoming);
+  prefetchUpcomingRef.current = prefetchUpcoming;
+
+  const runPrefetchUpcoming = useCallback(() => {
+    prefetchUpcomingRef.current();
+  }, []);
+
+  const panGesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .activeOffsetX([-12, 12])
+        .onStart(() => {
+          if (isSwipeLocked.value) return;
+          gesturePrefetchDone.value = 0;
+          runOnJS(runPrefetchUpcoming)();
+        })
+        .onUpdate((event) => {
+          if (isSwipeLocked.value) return;
+          panTranslateX.value = event.translationX;
+          panTranslateY.value = event.translationY;
+          if (
+            gesturePrefetchDone.value === 0 &&
+            Math.abs(event.translationX) > PREFETCH_ON_DRAG_PX
+          ) {
+            gesturePrefetchDone.value = 1;
+            runOnJS(runPrefetchUpcoming)();
+          }
+        })
+        .onEnd((event) => {
+          if (isSwipeLocked.value) return;
+
+          const shouldSwipe =
+            Math.abs(panTranslateX.value) > SWIPE_THRESHOLD ||
+            Math.abs(event.velocityX) > SWIPE_VELOCITY_THRESHOLD;
+
+          if (!shouldSwipe) {
+            panTranslateX.value = withSpring(0, { damping: 20, stiffness: 200 });
+            panTranslateY.value = withSpring(0, { damping: 20, stiffness: 200 });
+            return;
+          }
+
+          isSwipeLocked.value = true;
+          const toRight = panTranslateX.value > 0;
+          runOnJS(runPrefetchUpcoming)();
+          const destination = toRight ? WINDOW_WIDTH * 1.5 : -WINDOW_WIDTH * 1.5;
+
+          panTranslateX.value = withTiming(
+            destination,
+            { duration: SWIPE_OFF_DURATION_MS },
+            (finished) => {
+              if (finished) {
+                runOnJS(runCompleteSwipe)(toRight);
+              }
+            }
+          );
+        }),
+    [
+      gesturePrefetchDone,
+      isSwipeLocked,
+      panTranslateX,
+      panTranslateY,
+      runCompleteSwipe,
+      runPrefetchUpcoming,
+    ]
+  );
+
+  useEffect(() => {
+    const current = cards[headIndex];
+    if (current?.image) {
+      prefetchDateImageUrls([current.image]);
+    }
+    prefetchUpcomingFromDeck(cards, headIndex, 3);
+  }, [cards, headIndex]);
+
+  const cardAnimatedStyle = useAnimatedStyle(() => {
+    const rotate = interpolate(
+      panTranslateX.value,
+      [-WINDOW_WIDTH / 3, 0, WINDOW_WIDTH / 3],
+      [-12, 0, 12],
+      Extrapolation.CLAMP
+    );
+
+    return {
+      transform: [
+        { translateX: panTranslateX.value },
+        { translateY: panTranslateY.value },
+        { rotate: `${rotate}deg` },
+      ],
+    };
+  });
+
+  const resetPan = useCallback(() => {
+    isSwipeLocked.value = false;
+    cancelAnimation(panTranslateX);
+    cancelAnimation(panTranslateY);
+    panTranslateX.value = withSpring(0, { damping: 20, stiffness: 200 });
+    panTranslateY.value = withSpring(0, { damping: 20, stiffness: 200 });
+  }, [isSwipeLocked, panTranslateX, panTranslateY]);
+
+  const resetTopCard = useCallback(() => {
+    resetPan();
+  }, [resetPan]);
 
   const showFeedback = useCallback(
     (type: "like" | "pass") => {
@@ -70,69 +240,73 @@ const SwipeDeck = forwardRef<SwipeDeckHandle, SwipeDeckProps>(function SwipeDeck
     showFeedback,
   ]);
 
-  const cards = useMemo(
-    () => deckDates.filter((card): card is DateIdea => card != null && card.id != null),
-    [deckDates]
-  );
+  useLayoutEffect(() => {
+    cancelAnimation(panTranslateX);
+    cancelAnimation(panTranslateY);
+    panTranslateX.value = 0;
+    panTranslateY.value = 0;
+    isSwipeLocked.value = false;
+  }, [headIndex, isSwipeLocked, panTranslateX, panTranslateY]);
 
-  const stackSize = Math.min(3, Math.max(1, cards.length));
+  useEffect(() => {
+    setHeadIndex(0);
+    isSwipeLocked.value = false;
+    cancelAnimation(panTranslateX);
+    cancelAnimation(panTranslateY);
+    panTranslateX.value = 0;
+    panTranslateY.value = 0;
+  }, [swiperKey, firstCardId, isSwipeLocked, panTranslateX, panTranslateY]);
 
-  const renderCard = useCallback(
-    (card: DateIdea | undefined) =>
-      card ? (
-        <View style={styles.cardShell} collapsable={false}>
-          <DateCard item={card} />
-        </View>
-      ) : null,
-    []
-  );
-
-  const keyExtractor = useCallback((card: DateIdea | undefined) => {
-    if (card?.id != null) return String(card.id);
-    return "deck-slot-empty";
-  }, []);
-
-  if (cards.length === 0) {
+  if (cards.length === 0 || headIndex >= cards.length || !currentCard) {
     return <View style={styles.swiperDeck} collapsable={false} />;
   }
 
   return (
     <View style={styles.swiperDeck} collapsable={false}>
-      <Swiper
-        ref={swiperRef}
-        key={`swiper-${swiperKey}`}
-        cards={cards}
-        keyExtractor={keyExtractor}
-        renderCard={renderCard}
-        onSwipedRight={onSwipedRight}
-        onSwipedLeft={onSwipedLeft}
-        stackSize={stackSize}
-        stackScale={0}
-        stackSeparation={8}
-        backgroundColor="transparent"
-        cardVerticalMargin={12}
-        cardHorizontalMargin={0}
-        cardStyle={styles.cardStyle}
-      />
+      <View style={styles.cardContainer}>
+        {nextCard ? (
+          <View style={styles.preloadSlot} pointerEvents="none">
+            <DateCard item={nextCard} />
+          </View>
+        ) : null}
+        <GestureDetector gesture={panGesture}>
+          <Reanimated.View
+            key={String(currentCard.id)}
+            style={[styles.cardSlot, styles.topCardSlot, cardAnimatedStyle]}
+            collapsable={false}
+          >
+            <View style={styles.cardShell} collapsable={false}>
+              <DateCard item={currentCard} />
+            </View>
+          </Reanimated.View>
+        </GestureDetector>
+      </View>
       <View pointerEvents="none" style={styles.swipeFeedbackLayer}>
-        <Animated.View
-          style={[
-            styles.swipeFeedback,
-            styles.swipeFeedbackLike,
-            { opacity: feedbackLikeOpacity },
-          ]}
-        >
-          <Text style={[styles.swipeFeedbackText, styles.swipeFeedbackTextLike]}>✔</Text>
-        </Animated.View>
-        <Animated.View
-          style={[
-            styles.swipeFeedback,
-            styles.swipeFeedbackPass,
-            { opacity: feedbackPassOpacity },
-          ]}
-        >
-          <Text style={[styles.swipeFeedbackText, styles.swipeFeedbackTextPass]}>✕</Text>
-        </Animated.View>
+        <View style={styles.swipeFeedbackSlot}>
+          <View style={[styles.swipeFeedback, styles.swipeFeedbackSizer]} pointerEvents="none">
+            <Text style={styles.swipeFeedbackText}>✔</Text>
+          </View>
+          <Animated.View
+            style={[
+              styles.swipeFeedback,
+              styles.swipeFeedbackOverlay,
+              styles.swipeFeedbackLike,
+              { opacity: feedbackLikeOpacity },
+            ]}
+          >
+            <Text style={[styles.swipeFeedbackText, styles.swipeFeedbackTextLike]}>✔</Text>
+          </Animated.View>
+          <Animated.View
+            style={[
+              styles.swipeFeedback,
+              styles.swipeFeedbackOverlay,
+              styles.swipeFeedbackPass,
+              { opacity: feedbackPassOpacity },
+            ]}
+          >
+            <Text style={[styles.swipeFeedbackText, styles.swipeFeedbackTextPass]}>✕</Text>
+          </Animated.View>
+        </View>
       </View>
     </View>
   );
@@ -147,11 +321,29 @@ const styles = StyleSheet.create({
     zIndex: 2,
     elevation: 2,
   },
-  cardStyle: {
-    width: CARD_WIDTH,
-    alignSelf: "center",
-    marginLeft: (Dimensions.get("window").width - CARD_WIDTH) / 2,
+  cardContainer: {
+    flex: 1,
+    width: "100%",
+    alignItems: "center",
+    justifyContent: "center",
     marginBottom: 28,
+  },
+  cardSlot: {
+    position: "absolute",
+    top: CARD_TOP_OFFSET,
+    width: CARD_WIDTH,
+    left: CARD_LEFT,
+  },
+  preloadSlot: {
+    position: "absolute",
+    top: CARD_TOP_OFFSET,
+    width: CARD_WIDTH,
+    left: CARD_LEFT,
+    opacity: 0,
+    zIndex: 0,
+  },
+  topCardSlot: {
+    zIndex: 1,
   },
   cardShell: {
     width: CARD_WIDTH,
@@ -165,6 +357,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     zIndex: 4,
     elevation: 4,
+  },
+  swipeFeedbackSlot: {
+    position: "relative",
+  },
+  swipeFeedbackSizer: {
+    opacity: 0,
+  },
+  swipeFeedbackOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
   },
   swipeFeedback: {
     paddingHorizontal: 18,

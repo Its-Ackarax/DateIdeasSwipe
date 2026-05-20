@@ -1,3 +1,4 @@
+import { Pacifico_400Regular, useFonts } from "@expo-google-fonts/pacifico";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -16,14 +17,23 @@ import {
   Text,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import BrandStatusBar from "../../components/BrandStatusBar";
 import DateCard from "../../components/DateCard";
+import MatchesEmptyState from "../../components/MatchesEmptyState";
 import { captureAppError } from "../../lib/captureAppError";
 import { supabase } from "../../lib/supabase";
 import { getDateIdeas } from "../../services/getDateIdeas";
 import type { DateIdea } from "../../types/date";
 
+const TAB_BAR_HEIGHT = 49;
+/** Extra top inset above the header on the empty matches screen. */
+const EMPTY_CONTENT_TOP_OFFSET = 20;
+/** Space between the header card and the stage / CTA block. */
+const EMPTY_HEADER_BODY_GAP = 44;
+
 export default function Matches() {
+  const [fontsLoaded] = useFonts({ Pacifico_400Regular });
   const [matches, setMatches] = useState<string[]>([]);
   const [hasCouple, setHasCouple] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
@@ -34,9 +44,9 @@ export default function Matches() {
   const leftIndicatorOpacity = useRef<Record<string, Animated.Value>>({}).current;
   const layoutWidths = useRef<Record<string, number>>({}).current;
   const contentWidths = useRef<Record<string, number>>({}).current;
+  const insets = useSafeAreaInsets();
   const topInset =
     Platform.OS === "android" ? (RNStatusBar.currentHeight ?? 0) + 8 : 8;
-
   useEffect(() => {
     if (selectedIdea) {
       previewTranslate.setValue({ x: 0, y: 0 });
@@ -365,8 +375,63 @@ export default function Matches() {
     );
   }
 
+  if (sections.length === 0) {
+    if (!fontsLoaded) {
+      return (
+        <View style={styles.loadingState}>
+          <ActivityIndicator size="large" />
+        </View>
+      );
+    }
+
+    return (
+      <LinearGradient
+        colors={["#fda4af", "#fff1f2", "#fff1f2"]}
+        locations={[0, 0.28, 1]}
+        style={styles.screen}
+      >
+        <BrandStatusBar />
+        <View style={styles.topGlow} />
+        <View style={styles.bottomGlow} />
+        <View
+          style={[
+            styles.emptyPage,
+            {
+              paddingTop: topInset + EMPTY_CONTENT_TOP_OFFSET,
+              paddingBottom: insets.bottom + TAB_BAR_HEIGHT,
+            },
+          ]}
+        >
+          <View style={styles.emptyHeaderOuter}>
+            <View style={styles.emptyHeaderCard}>
+              <View style={styles.emptyHeaderLabel}>
+                <Text style={styles.emptyHeaderLabelText}>Matches</Text>
+              </View>
+              <View style={styles.emptyHeaderTitleRow}>
+                <Text style={styles.emptyHeaderHeart}>❤</Text>
+                <Text style={styles.emptyHeaderTitle}>Shared date ideas</Text>
+              </View>
+              <Text style={styles.emptyHeaderSubtitle}>
+                Date ideas you and your partner both liked.
+              </Text>
+            </View>
+          </View>
+          <MatchesEmptyState
+            contentPaddingHorizontal={PAGE_PADDING}
+            style={styles.emptyBody}
+            onStartSwiping={() => router.push("/(tabs)")}
+          />
+        </View>
+      </LinearGradient>
+    );
+  }
+
   return (
-    <LinearGradient colors={["#fb7185", "#fff1f2"]} style={styles.screen}>
+    <LinearGradient
+      colors={["#fda4af", "#fff1f2", "#fff1f2"]}
+      locations={[0, 0.28, 1]}
+      style={styles.screen}
+    >
       <BrandStatusBar />
       <View style={styles.topGlow} />
       <View style={styles.bottomGlow} />
@@ -383,12 +448,7 @@ export default function Matches() {
             Date ideas you and your partner both liked.
           </Text>
         </View>
-        {sections.length === 0 ? (
-          <Text style={styles.emptyText}>
-            No matches yet - like some dates to get started!
-          </Text>
-        ) : (
-          sections.map((section) => {
+        {sections.map((section) => {
             const opacityValue =
               indicatorOpacity[section.title] ?? new Animated.Value(1);
             const leftOpacityValue =
@@ -520,8 +580,7 @@ export default function Matches() {
               </View>
               </View>
             );
-          })
-        )}
+          })}
       </ScrollView>
       <Modal
         visible={Boolean(selectedIdea)}
@@ -607,6 +666,74 @@ const styles = StyleSheet.create({
   page: {
     padding: PAGE_PADDING,
     paddingBottom: 40,
+  },
+  emptyPage: {
+    flex: 1,
+    paddingHorizontal: PAGE_PADDING,
+    gap: EMPTY_HEADER_BODY_GAP,
+  },
+  emptyBody: {
+    flex: 1,
+    minHeight: 0,
+  },
+  emptyHeaderOuter: {
+    alignItems: "center",
+    paddingHorizontal: 16,
+  },
+  emptyHeaderCard: {
+    backgroundColor: "rgba(255, 255, 255, 0.92)",
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(244, 63, 94, 0.18)",
+    shadowColor: "#7f1d1d",
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 3,
+    alignItems: "center",
+    gap: 6,
+  },
+  emptyHeaderLabel: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: "rgba(244, 63, 94, 0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(244, 63, 94, 0.16)",
+  },
+  emptyHeaderLabelText: {
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.8,
+    color: "#be123c",
+    textTransform: "uppercase",
+  },
+  emptyHeaderTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 4,
+    justifyContent: "center",
+  },
+  emptyHeaderHeart: {
+    fontSize: 18,
+    color: "#e11d48",
+  },
+  emptyHeaderTitle: {
+    fontSize: 20,
+    color: "#7f1d1d",
+    letterSpacing: 0.3,
+    fontFamily: "Pacifico_400Regular",
+  },
+  emptyHeaderSubtitle: {
+    fontSize: 13,
+    color: "#6b7280",
+    textAlign: "center",
+    fontWeight: "500",
+    letterSpacing: 0.2,
+    fontFamily: "System",
   },
   header: {
     marginBottom: 22,
@@ -964,10 +1091,5 @@ const styles = StyleSheet.create({
   loadingState: {
     flex: 1,
     justifyContent: "center",
-  },
-  emptyText: {
-    textAlign: "center",
-    marginTop: 40,
-    color: "#64748b",
   },
 });

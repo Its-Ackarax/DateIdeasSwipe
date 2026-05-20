@@ -1,31 +1,73 @@
-import { useEffect, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
-  Image,
-  Dimensions,
   ActivityIndicator,
 } from "react-native";
+import { Image } from "expo-image";
+import { CARD_HEIGHT, CARD_WIDTH } from "../constants/cardLayout";
 
-export default function DateCard({ item }) {
-  if (!item) return null;
+const LOADING_OVERLAY_DELAY_MS = 120;
 
-  const [imageLoading, setImageLoading] = useState(Boolean(item.image));
+function DateCard({ item }) {
+  const [imageLoading, setImageLoading] = useState(false);
+  const loadingTimerRef = useRef(null);
+  const cardId = item ? String(item.id) : "";
 
   useEffect(() => {
-    setImageLoading(Boolean(item.image));
-  }, [item?.image]);
+    setImageLoading(false);
+    if (loadingTimerRef.current != null) {
+      clearTimeout(loadingTimerRef.current);
+      loadingTimerRef.current = null;
+    }
+  }, [cardId]);
+
+  useEffect(() => {
+    return () => {
+      if (loadingTimerRef.current != null) {
+        clearTimeout(loadingTimerRef.current);
+        loadingTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  if (!item) return null;
+
+  const clearLoadingTimer = () => {
+    if (loadingTimerRef.current != null) {
+      clearTimeout(loadingTimerRef.current);
+      loadingTimerRef.current = null;
+    }
+  };
+
+  const handleLoadStart = () => {
+    clearLoadingTimer();
+    loadingTimerRef.current = setTimeout(() => {
+      setImageLoading(true);
+    }, LOADING_OVERLAY_DELAY_MS);
+  };
+
+  const handleLoadEnd = () => {
+    clearLoadingTimer();
+    setImageLoading(false);
+  };
 
   return (
-    <View style={styles.card}>
+    <View key={cardId} style={styles.card}>
       <View style={styles.imageWrap}>
         <Image
+          key={cardId}
+          recyclingKey={cardId}
           source={{ uri: item.image }}
           style={styles.image}
-          onLoadStart={() => setImageLoading(true)}
-          onLoadEnd={() => setImageLoading(false)}
-          onError={() => setImageLoading(false)}
+          contentFit="cover"
+          cachePolicy="memory-disk"
+          priority="high"
+          transition={0}
+          onLoadStart={handleLoadStart}
+          onLoad={handleLoadEnd}
+          onError={handleLoadEnd}
         />
         {imageLoading ? (
           <View pointerEvents="none" style={styles.imageLoadingOverlay}>
@@ -53,8 +95,12 @@ export default function DateCard({ item }) {
   );
 }
 
-const CARD_HEIGHT = Math.round(Dimensions.get("window").height * 0.64);
-const CARD_WIDTH = Math.round(Dimensions.get("window").width * 0.88);
+function areDateCardPropsEqual(prev, next) {
+  return String(prev.item?.id) === String(next.item?.id);
+}
+
+export default memo(DateCard, areDateCardPropsEqual);
+
 const IMAGE_HEIGHT = Math.round(CARD_HEIGHT * 0.62);
 
 const styles = StyleSheet.create({

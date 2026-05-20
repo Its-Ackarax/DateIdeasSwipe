@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import RevenueCatUI from "react-native-purchases-ui";
+import AuthGate from "../components/AuthGate";
 import { captureAppError } from "../lib/captureAppError";
 import { PRO_ENTITLEMENT_ID, REVENUECAT_PAYWALL_ENABLED } from "../lib/revenuecat";
 import { usePro } from "../store/ProContext";
@@ -64,6 +65,7 @@ export default function PaywallScreen() {
   }, [isPro, presentPaywall]);
 
   return (
+    <AuthGate>
     <LinearGradient colors={["#fb7185", "#fff1f2", "#fff1f2"]} style={styles.page}>
       <View style={styles.topGlow} />
       <View
@@ -119,6 +121,7 @@ export default function PaywallScreen() {
         </Pressable>
       </View>
     </LinearGradient>
+    </AuthGate>
   );
 }
 

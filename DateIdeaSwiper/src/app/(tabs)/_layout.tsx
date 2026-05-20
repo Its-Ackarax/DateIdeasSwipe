@@ -1,11 +1,13 @@
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import AuthGate from "../../components/AuthGate";
 
 /** MVP: hide Likes tab; screen file stays for a future release. Set `true` to show again. */
 const LIKES_TAB_ENABLED = false;
 
 export default function TabLayout() {
     return (
+      <AuthGate>
       <Tabs screenOptions={{ 
         headerShown: false,
         tabBarActiveTintColor:"#ff4d6d",
@@ -53,5 +55,6 @@ export default function TabLayout() {
         />
   
       </Tabs>
+      </AuthGate>
     );
   }

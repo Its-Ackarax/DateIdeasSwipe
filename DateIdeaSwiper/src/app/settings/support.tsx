@@ -16,6 +16,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import AuthGate from "../../components/AuthGate";
 import useAndroidNavigationBar from "../../hooks/useAndroidNavigationBar";
 import { captureAppError } from "../../lib/captureAppError";
 
@@ -113,6 +114,7 @@ export default function SupportScreen() {
   }, [message, topic]);
 
   return (
+    <AuthGate>
     <LinearGradient colors={["#fb7185", "#fff1f2", "#fff1f2"]} style={styles.page}>
       <View style={styles.topGlow} />
       <KeyboardAvoidingView
@@ -216,6 +218,7 @@ export default function SupportScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
     </LinearGradient>
+    </AuthGate>
   );
 }
 

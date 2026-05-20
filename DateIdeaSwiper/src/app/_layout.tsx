@@ -1,6 +1,8 @@
 import { Stack } from "expo-router";
 import { LikesProvider } from "../store/LikesContext";
 import { useEffect, useMemo, useState } from "react";
+import { StyleSheet } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import Purchases from "react-native-purchases";
 import analytics from "@react-native-firebase/analytics";
 import { supabase } from "../lib/supabase";
@@ -22,7 +24,7 @@ Sentry.init({
 
   // Adds more context data to events (IP address, cookies, user, etc.)
   // For more information, visit: https://docs.sentry.io/platforms/react-native/data-management/data-collected/
-  sendDefaultPii: true,
+  sendDefaultPii: false,
 
   // Enable Logs
   enableLogs: false,
@@ -97,12 +99,18 @@ function RootLayout() {
   const proValue = useMemo(() => ({ customerInfo, isPro }), [customerInfo, isPro]);
 
   return (
-    <ProContext.Provider value={proValue}>
-      <LikesProvider>
-        <Stack screenOptions={{ headerShown: false }} />
-      </LikesProvider>
-    </ProContext.Provider>
+    <GestureHandlerRootView style={styles.root}>
+      <ProContext.Provider value={proValue}>
+        <LikesProvider>
+          <Stack screenOptions={{ headerShown: false }} />
+        </LikesProvider>
+      </ProContext.Provider>
+    </GestureHandlerRootView>
   );
 }
+
+const styles = StyleSheet.create({
+  root: { flex: 1 },
+});
 
 export default Sentry.wrap(RootLayout);

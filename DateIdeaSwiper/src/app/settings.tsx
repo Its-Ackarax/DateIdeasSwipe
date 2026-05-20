@@ -7,6 +7,7 @@ import { type Href, router } from "expo-router";
 import { useCallback, useState } from "react";
 import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import AuthGate from "../components/AuthGate";
 import ConfirmDialog from "../components/ConfirmDialog";
 import SettingsRow from "../components/SettingsRow";
 import useAndroidNavigationBar from "../hooks/useAndroidNavigationBar";
@@ -99,6 +100,7 @@ export default function SettingsScreen() {
   }, [deletingAccount]);
 
   return (
+    <AuthGate>
     <LinearGradient colors={["#fb7185", "#fff1f2", "#fff1f2"]} style={styles.page}>
       <View style={styles.topGlow} />
       <View style={[styles.pageInner, { paddingTop: insets.top + 10 }]}>
@@ -208,6 +210,7 @@ export default function SettingsScreen() {
         onConfirm={deleteAccount}
       />
     </LinearGradient>
+    </AuthGate>
   );
 }
 

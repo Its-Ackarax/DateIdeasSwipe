@@ -3,6 +3,7 @@ import { router } from "expo-router";
 import { useMemo } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import AuthGate from "../../components/AuthGate";
 import SettingsRow from "../../components/SettingsRow";
 import useAndroidNavigationBar from "../../hooks/useAndroidNavigationBar";
 
@@ -33,6 +34,7 @@ export default function FAQScreen() {
   );
 
   return (
+    <AuthGate>
     <LinearGradient colors={["#fb7185", "#fff1f2", "#fff1f2"]} style={styles.page}>
       <View style={styles.topGlow} />
       <View style={[styles.pageInner, { paddingTop: insets.top + 10 }]}>
@@ -85,6 +87,7 @@ export default function FAQScreen() {
         </ScrollView>
       </View>
     </LinearGradient>
+    </AuthGate>
   );
 }
 

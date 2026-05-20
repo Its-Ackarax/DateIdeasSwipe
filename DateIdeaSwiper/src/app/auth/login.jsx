@@ -1,5 +1,5 @@
 import { LinearGradient } from "expo-linear-gradient";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import Constants from "expo-constants";
 import * as Linking from "expo-linking";
 import { useMemo, useState } from "react";
@@ -14,11 +14,13 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { getPostLoginRedirect } from "../../lib/authRedirect";
 import { markOnboardingComplete } from "../../lib/onboarding";
 import { supabase } from "../../lib/supabase";
 import ConfirmDialog from "../../components/ConfirmDialog";
 
 export default function Login() {
+  const { redirectTo } = useLocalSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
@@ -45,7 +47,7 @@ export default function Login() {
     }
 
     await markOnboardingComplete();
-    router.replace("/(tabs)");
+    router.replace(getPostLoginRedirect(redirectTo));
     setLoginLoading(false);
   }
 

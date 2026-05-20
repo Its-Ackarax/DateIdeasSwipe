@@ -15,6 +15,7 @@ import {
 } from "react-native";
 import BrandStatusBar from "../../components/BrandStatusBar";
 import SwipeDeck, { type SwipeDeckHandle } from "../../components/SwipeDeck";
+import SwipeStageBackground from "../../components/SwipeStageBackground";
 import { captureAppError } from "../../lib/captureAppError";
 import { REVENUECAT_PAYWALL_ENABLED } from "../../lib/revenuecat";
 import { supabase } from "../../lib/supabase";
@@ -27,6 +28,7 @@ import { getDateIdeas } from "../../services/getDateIdeas";
 import { saveSwipe } from "../../services/saveSwipe";
 import { DateIdea } from "../../types/date";
 import { dailySeededOrder } from "../../utils/dailySeededOrder";
+import { prefetchDateImages } from "../../utils/prefetchDateImages";
 
 export default function Home() {
 
@@ -58,32 +60,6 @@ export default function Home() {
       opacity: new Animated.Value(0),
     }))
   ).current;
-
-  // 🔐 auth guard
-  useFocusEffect(
-    useCallback(() => {
-      let active = true;
-      (async () => {
-        try {
-          const { data, error } = await supabase.auth.getSession();
-          if (!active) return;
-          if (error) {
-            captureAppError(error, { op: "getSession", screen: "home" });
-            return;
-          }
-          if (!data.session) router.replace("../auth/login");
-        } catch (error) {
-          if (active) captureAppError(error, { op: "getSession_catch", screen: "home" });
-        }
-      })();
-
-      return () => {
-        active = false;
-      };
-    }, [])
-  );
-
-  
 
   const loadMatchPreference = useCallback(async () => {
     try {
@@ -283,7 +259,9 @@ export default function Home() {
   useEffect(() => {
     if (suppressDeckSyncRef.current) return;
     if (loading || datesLoading || !userId || dates.length === 0) return;
-    setDeckDates(buildDeck());
+    const nextDeck = buildDeck();
+    setDeckDates(nextDeck);
+    prefetchDateImages(nextDeck, 5);
   }, [buildDeck, loading, datesLoading, userId, dates.length]);
 
   if (!fontsLoaded || loading || datesLoading) {
@@ -302,8 +280,8 @@ export default function Home() {
 
   return (
     <LinearGradient
-      colors={["#fb7185", "#fff1f2", "#fff1f2"]}
-      locations={[0, 0.35, 1]}
+      colors={["#fda4af", "#fff1f2", "#fff1f2"]}
+      locations={[0, 0.28, 1]}
       style={styles.page}
     >
       <BrandStatusBar />
@@ -325,14 +303,7 @@ export default function Home() {
         style={styles.swiperWrap}
         pointerEvents={matchVisible ? "none" : "auto"}
       >
-        <LinearGradient
-          colors={["#ff0033", "rgba(255, 255, 255, 0)", "#00f56a"]}
-          locations={[0, 0.5, 1]}
-          start={{ x: 0, y: 0.5 }}
-          end={{ x: 1, y: 0.5 }}
-          style={styles.gradientHint}
-          pointerEvents="none"
-        />
+        <SwipeStageBackground />
         {deckDates.length > 0 ? (
           <SwipeDeck
             ref={swipeDeckRef}
@@ -422,15 +393,6 @@ const styles = StyleSheet.create({
     paddingTop: 24,
     paddingHorizontal: 0,
   },
-  heroBackground: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 180,
-    backgroundColor: "#7f1d1d",
-    opacity: 0.2,
-  },
   header: {
     alignItems: "center",
     marginTop: 28,
@@ -519,20 +481,6 @@ const styles = StyleSheet.create({
     color: "#9f1239",
     textAlign: "center",
     lineHeight: 22,
-  },
-  gradientHint: {
-    position: "absolute",
-    top: "50%",
-    left: 8,
-    right: 8,
-    height: 320,
-    borderRadius: 20,
-    opacity: 0.55,
-    borderWidth: 1,
-    borderColor: "#ffffff",
-    zIndex: 0,
-    elevation: 0,
-    marginTop: -160,
   },
   matchBackdrop: {
     flex: 1,
