@@ -28,6 +28,7 @@ import Reanimated, {
   withTiming,
 } from "react-native-reanimated";
 import {
+  CARD_AREA_MARGIN_BOTTOM,
   CARD_LEFT,
   CARD_TOP_OFFSET,
   CARD_WIDTH,
@@ -326,7 +327,7 @@ const styles = StyleSheet.create({
     width: "100%",
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 28,
+    marginBottom: CARD_AREA_MARGIN_BOTTOM,
   },
   cardSlot: {
     position: "absolute",

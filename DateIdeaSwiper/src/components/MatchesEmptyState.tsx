@@ -9,14 +9,14 @@ import {
   type ViewStyle,
 } from "react-native";
 
-const CARD_WIDTH_RATIO = 0.88;
-const CARD_AREA_HEIGHT_RATIO = 0.88;
+const CARD_WIDTH_RATIO = 0.92;
+const CARD_AREA_HEIGHT_RATIO = 0.99;
 const CARD_MIN_HEIGHT = 240;
-const CARD_MAX_HEIGHT = 480;
-const CARD_AREA_PADDING_VERTICAL = 16;
+const CARD_MAX_HEIGHT = 560;
+const CARD_VERTICAL_RESERVE = 2;
 const CARD_CTA_GAP = 28;
-const CTA_BOTTOM_GAP = 16;
-const COMPACT_CARD_AREA_HEIGHT = 520;
+const CTA_BOTTOM_GAP = 0;
+const COMPACT_WINDOW_HEIGHT = 680;
 /** Rough space for header, gaps, CTA, and tab bar when cardArea is not measured yet. */
 const FALLBACK_CHROME_HEIGHT = 320;
 
@@ -30,7 +30,7 @@ function computeCardHeight(cardAreaHeight: number) {
   if (cardAreaHeight <= 0) {
     return CARD_MIN_HEIGHT;
   }
-  const usable = Math.max(0, cardAreaHeight - CARD_AREA_PADDING_VERTICAL);
+  const usable = Math.max(0, cardAreaHeight - CARD_VERTICAL_RESERVE);
   return Math.min(
     CARD_MAX_HEIGHT,
     Math.max(CARD_MIN_HEIGHT, Math.floor(usable * CARD_AREA_HEIGHT_RATIO))
@@ -59,8 +59,7 @@ export default function MatchesEmptyState({
     return computeCardHeight(fallbackCardArea);
   }, [cardAreaHeight, windowHeight]);
 
-  const isCompactCardArea =
-    cardAreaHeight > 0 && cardAreaHeight < COMPACT_CARD_AREA_HEIGHT;
+  const isCompact = windowHeight < COMPACT_WINDOW_HEIGHT;
 
   const onCardAreaLayout = useCallback(
     (event: { nativeEvent: { layout: { height: number } } }) => {
@@ -79,14 +78,14 @@ export default function MatchesEmptyState({
             { width: cardWidth, height: cardHeight },
           ]}
         >
-          <View style={[styles.iconWrap, isCompactCardArea && styles.iconWrapCompact]}>
-            <Text style={[styles.icon, isCompactCardArea && styles.iconCompact]}>✨</Text>
+          <View style={[styles.iconWrap, isCompact && styles.iconWrapCompact]}>
+            <Text style={[styles.icon, isCompact && styles.iconCompact]}>✨</Text>
           </View>
-          <Text style={[styles.headline, isCompactCardArea && styles.headlineCompact]}>
+          <Text style={[styles.headline, isCompact && styles.headlineCompact]}>
             No matches yet
           </Text>
           <Text
-            style={[styles.bodyText, isCompactCardArea && styles.bodyTextCompact]}
+            style={[styles.bodyText, isCompact && styles.bodyTextCompact]}
             numberOfLines={5}
           >
             When you and your partner both swipe right on the same idea, it shows up here.
@@ -113,7 +112,7 @@ const styles = StyleSheet.create({
     minHeight: 0,
     justifyContent: "center",
     alignItems: "center",
-    paddingVertical: 8,
+    marginBottom: CARD_CTA_GAP,
   },
   placeholderCard: {
     borderRadius: 24,
@@ -180,7 +179,7 @@ const styles = StyleSheet.create({
   },
   cta: {
     alignSelf: "stretch",
-    marginTop: CARD_CTA_GAP,
+    marginTop: "auto",
     marginBottom: CTA_BOTTOM_GAP,
     paddingVertical: 16,
     borderRadius: 16,

@@ -21,7 +21,9 @@ export async function checkMatch(
   if (!data) return false;
 
   if (data.length === 2) {
-    await saveMatch(coupleId, dateId);
+    void saveMatch(coupleId, dateId).catch((err) =>
+      captureAppError(err, { op: "saveMatch_deferred", coupleId, dateId })
+    );
     return true;
   }
 

@@ -2,6 +2,7 @@ import { View, Text, ActivityIndicator, Pressable, StyleSheet } from "react-nati
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "expo-linear-gradient";
 import { useCallback, useState } from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "../../../lib/supabase";
 import { captureAppError } from "../../../lib/captureAppError";
 import { clearOnboardingComplete } from "../../../lib/onboarding";
@@ -9,6 +10,7 @@ import { type Href, router, useFocusEffect } from "expo-router";
 import ConfirmDialog from "../../../components/ConfirmDialog";
 
 export default function Profile() {
+  const insets = useSafeAreaInsets();
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [partner, setPartner] = useState<string | null>(null);
   const [coupleId, setCoupleId] = useState<string | null>(null);
@@ -206,109 +208,124 @@ export default function Profile() {
   if (loading) return <ActivityIndicator style={{ flex: 1 }} />;
 
   return (
-    <LinearGradient colors={["#fb7185", "#fff1f2"]} style={styles.page}>
+    <LinearGradient
+      colors={["#fb7185", "#fff1f2", "#fff1f2"]}
+      locations={[0, 0.28, 1]}
+      style={styles.page}
+    >
       <View style={styles.heroBackground} />
       <View style={styles.bottomGlow} />
-      <View style={styles.card}>
-        <View style={styles.heroHeader}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>
-              {(userEmail ?? "?").charAt(0).toUpperCase()}
-            </Text>
-          </View>
-          <View style={styles.headerText}>
-            <Text style={styles.title}>Your Profile</Text>
+      <View
+        style={[
+          styles.pageInner,
+          {
+            paddingTop: insets.top + 12,
+            paddingBottom: Math.max(insets.bottom, 16) + 16,
+          },
+        ]}
+      >
+        <View style={styles.card}>
+          <View style={styles.hero}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>
+                {(userEmail ?? "?").charAt(0).toUpperCase()}
+              </Text>
+            </View>
+            <View style={styles.heartPill}>
+              <Text style={styles.heart}>❤</Text>
+              <Text style={styles.heartPillText}>Profile</Text>
+            </View>
             <Text style={styles.email}>{userEmail ?? "Unknown user"}</Text>
           </View>
-          <Text style={styles.heart}>❤</Text>
-        </View>
 
-        <View style={styles.section}>
-          <View style={styles.rowBetween}>
-            <View>
-              <Text style={styles.label}>Partner status</Text>
-              <View style={styles.chip}>
-                <Text style={styles.chipText}>
-                  {partner ?? "Not linked"}
-                </Text>
+          <View style={styles.partnerSection}>
+            <View style={styles.rowBetween}>
+              <View>
+                <Text style={styles.label}>Partner status</Text>
+                <View style={styles.chip}>
+                  <Text style={styles.chipText}>
+                    {partner ?? "Not linked"}
+                  </Text>
+                </View>
+              </View>
+              {!partner ? (
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.button,
+                    styles.primaryButton,
+                    pressed && styles.buttonPressed,
+                  ]}
+                  onPress={() => router.push("../profile/link")}
+                >
+                  <Text style={styles.primaryButtonText}>Link Partner</Text>
+                </Pressable>
+              ) : (
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.button,
+                    styles.dangerButton,
+                    pressed && styles.buttonPressed,
+                  ]}
+                  onPress={confirmUnlink}
+                >
+                  <Text style={styles.dangerButtonText}>Unlink</Text>
+                </Pressable>
+              )}
+            </View>
+          </View>
+
+          <View style={styles.contentLower}>
+            <View style={styles.statsBlock}>
+              <Text style={styles.label}>Your stats</Text>
+              <View style={styles.statsRow}>
+                <View style={styles.statCard}>
+                  <Text style={styles.statValue}>{likesCount}</Text>
+                  <Text style={styles.statLabel}>Likes</Text>
+                </View>
+                <View style={styles.statCard}>
+                  <Text style={styles.statValue}>{matchesCount}</Text>
+                  <Text style={styles.statLabel}>Matches</Text>
+                </View>
               </View>
             </View>
-            {!partner ? (
-              <Pressable
+
+            <View style={styles.actionsSection}>
+              <Text style={[styles.label, styles.actionsLabel]}>Actions</Text>
+              <View style={styles.actionsStack}>
+                <Pressable
                 style={({ pressed }) => [
-                  styles.button,
-                  styles.primaryButton,
+                  styles.actionButton,
+                  styles.secondaryButton,
                   pressed && styles.buttonPressed,
                 ]}
-                onPress={() => router.push("../profile/link")}
+                onPress={confirmReset}
               >
-                <Text style={styles.primaryButtonText}>Link Partner</Text>
+                <Text style={styles.secondaryButtonText}>Reset Swipes</Text>
               </Pressable>
-            ) : (
               <Pressable
                 style={({ pressed }) => [
-                  styles.button,
+                  styles.actionButton,
+                  styles.secondaryButton,
+                  pressed && styles.buttonPressed,
+                ]}
+                onPress={() => router.push("/settings")}
+              >
+                <Text style={styles.secondaryButtonText}>Settings</Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.actionButton,
                   styles.dangerButton,
                   pressed && styles.buttonPressed,
                 ]}
-                onPress={confirmUnlink}
+                onPress={confirmLogout}
               >
-                <Text style={styles.dangerButtonText}>Unlink</Text>
-              </Pressable>
-            )}
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.label}>Your stats</Text>
-          <View style={styles.statsRow}>
-            <View style={styles.statCard}>
-              <Text style={styles.statValue}>{likesCount}</Text>
-              <Text style={styles.statLabel}>Likes</Text>
-            </View>
-            <View style={styles.statCard}>
-              <Text style={styles.statValue}>{matchesCount}</Text>
-              <Text style={styles.statLabel}>Matches</Text>
+                <Text style={styles.dangerButtonText}>Log Out</Text>
+                </Pressable>
+              </View>
             </View>
           </View>
         </View>
-
-        <View style={styles.section}>
-          <Text style={styles.label}>Actions</Text>
-          <Pressable
-            style={({ pressed }) => [
-              styles.button,
-              styles.secondaryButton,
-              pressed && styles.buttonPressed,
-            ]}
-            onPress={confirmReset}
-          >
-            <Text style={styles.secondaryButtonText}>Reset Swipes</Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [
-              styles.button,
-              styles.dangerButton,
-              pressed && styles.buttonPressed,
-            ]}
-            onPress={confirmLogout}
-          >
-            <Text style={styles.dangerButtonText}>Log Out</Text>
-          </Pressable>
-        </View>
-      </View>
-      <View style={styles.secondaryCard}>
-        <Text style={styles.sectionTitle}>Quick actions</Text>
-        <Pressable
-          style={({ pressed }) => [
-            styles.button,
-            styles.secondaryButton,
-            pressed && styles.buttonPressed,
-          ]}
-          onPress={() => router.push("/settings")}
-        >
-          <Text style={styles.secondaryButtonText}>Settings</Text>
-        </Pressable>
       </View>
       <ConfirmDialog
         visible={resetDialogVisible}
@@ -327,6 +344,7 @@ export default function Profile() {
         message="You can start swiping again."
         cancelText="Close"
         confirmText="OK"
+        destructive
         loading={false}
         onCancel={() => setResetDoneVisible(false)}
         onConfirm={() => setResetDoneVisible(false)}
@@ -360,11 +378,6 @@ export default function Profile() {
 const styles = StyleSheet.create({
   page: {
     flex: 1,
-    alignItems: "center",
-    justifyContent: "flex-start",
-    padding: 20,
-    paddingTop: 56,
-    paddingBottom: 40,
   },
   heroBackground: {
     position: "absolute",
@@ -386,82 +399,98 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 220,
     borderTopRightRadius: 220,
   },
-  card: {
+  pageInner: {
+    flex: 1,
     width: "100%",
     maxWidth: 420,
+    alignSelf: "center",
+    paddingHorizontal: 20,
+  },
+  card: {
+    flex: 1,
+    alignSelf: "stretch",
     backgroundColor: "rgba(255, 255, 255, 0.92)",
-    borderRadius: 20,
-    padding: 20,
+    borderRadius: 22,
+    padding: 24,
     borderWidth: 1,
-    borderColor: "rgba(15, 23, 42, 0.08)",
-    shadowColor: "#0f172a",
+    borderColor: "rgba(244, 63, 94, 0.18)",
+    shadowColor: "#7f1d1d",
     shadowOpacity: 0.12,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 10 },
     elevation: 4,
-    marginTop: 16,
   },
-  secondaryCard: {
-    width: "100%",
-    maxWidth: 420,
-    marginTop: 14,
-    padding: 18,
-    borderRadius: 18,
-    backgroundColor: "rgba(255, 255, 255, 0.88)",
-    borderWidth: 1,
-    borderColor: "rgba(15, 23, 42, 0.08)",
-    shadowColor: "#0f172a",
-    shadowOpacity: 0.1,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 3,
-  },
-  heroHeader: {
-    flexDirection: "row",
+  hero: {
     alignItems: "center",
-    marginBottom: 16,
-    paddingBottom: 10,
+    paddingBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: "rgba(148, 163, 184, 0.3)",
+    gap: 8,
   },
   avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 76,
+    height: 76,
+    borderRadius: 38,
     backgroundColor: "#fee2e2",
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 12,
+    marginBottom: 4,
   },
   avatarText: {
-    fontSize: 22,
+    fontSize: 30,
     fontWeight: "600",
     color: "#7f1d1d",
   },
-  headerText: {
-    flex: 1,
+  heartPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: "rgba(244, 63, 94, 0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(244, 63, 94, 0.16)",
   },
-  title: {
-    fontSize: 22,
+  heart: {
+    fontSize: 14,
+    color: "#e11d48",
+  },
+  heartPillText: {
+    fontSize: 11,
     fontWeight: "700",
-    marginBottom: 4,
-    color: "#111827",
+    letterSpacing: 0.8,
+    color: "#be123c",
+    textTransform: "uppercase",
   },
   email: {
     fontSize: 14,
     color: "#6b7280",
+    textAlign: "center",
   },
-  heart: {
-    fontSize: 20,
-    color: "#be123c",
-    marginLeft: 8,
+  partnerSection: {
+    paddingTop: 8,
+    paddingBottom: 4,
   },
-  section: {
-    marginTop: 12,
+  contentLower: {
+    flex: 1,
+    flexDirection: "column",
+    justifyContent: "flex-end",
+    minHeight: 0,
+  },
+  statsBlock: {
+    alignSelf: "stretch",
+    paddingTop: 24,
+  },
+  actionsSection: {
+    flexShrink: 0,
+  },
+  actionsLabel: {
+    marginTop: 20,
   },
   rowBetween: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-end",
     justifyContent: "space-between",
     gap: 12,
   },
@@ -471,14 +500,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     color: "#6b7280",
     marginBottom: 8,
-  },
-  sectionTitle: {
-    fontSize: 14,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    color: "#6b7280",
-    marginBottom: 8,
-    fontWeight: "600",
   },
   chip: {
     alignSelf: "flex-start",
@@ -498,12 +519,14 @@ const styles = StyleSheet.create({
   statCard: {
     flex: 1,
     backgroundColor: "#f8fafc",
-    borderRadius: 12,
-    paddingVertical: 12,
+    borderRadius: 14,
+    paddingVertical: 18,
     alignItems: "center",
+    borderWidth: 1,
+    borderColor: "rgba(244, 63, 94, 0.18)",
   },
   statValue: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: "700",
     color: "#0f172a",
   },
@@ -512,13 +535,22 @@ const styles = StyleSheet.create({
     color: "#6b7280",
     marginTop: 4,
   },
+  actionsStack: {
+    gap: 8,
+  },
   button: {
     paddingVertical: 10,
     paddingHorizontal: 14,
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 8,
+  },
+  actionButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
   },
   primaryButton: {
     backgroundColor: "#2563eb",

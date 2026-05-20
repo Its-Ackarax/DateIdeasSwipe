@@ -43,6 +43,10 @@ export default function Home() {
   const [seenIds, setSeenIds] = useState<string[]>([]);
   const [deckDates, setDeckDates] = useState<DateIdea[]>([]);
   const [userId, setUserId] = useState<string | null>(null);
+  const [coupleId, setCoupleId] = useState<string | null>(null);
+  const coupleIdRef = useRef<string | null>(null);
+  const matchVisibleRef = useRef(false);
+  const pendingMatchCountRef = useRef(0);
   const suppressDeckSyncRef = useRef(false);
   const swipeDeckRef = useRef<SwipeDeckHandle>(null);
   const deckDatesRef = useRef(deckDates);
@@ -53,6 +57,7 @@ export default function Home() {
   const [datesLoading, setDatesLoading] = useState(true);
   const [swiperKey, setSwiperKey] = useState(0);
   const [matchVisible, setMatchVisible] = useState(false);
+  const [matchIsFollowUp, setMatchIsFollowUp] = useState(false);
   const [matchToastDisabled, setMatchToastDisabled] = useState(false);
   const heartAnimations = useRef(
     [0, 1, 2].map(() => ({
@@ -80,10 +85,13 @@ export default function Home() {
     }, [loadMatchPreference])
   );
 
-  const openMatchModal = useCallback(() => {
-    if (matchToastDisabled) return;
-    setMatchVisible(true);
-  }, [matchToastDisabled]);
+  useEffect(() => {
+    coupleIdRef.current = coupleId;
+  }, [coupleId]);
+
+  useEffect(() => {
+    matchVisibleRef.current = matchVisible;
+  }, [matchVisible]);
 
   const triggerMatchHearts = useCallback(() => {
     heartAnimations.forEach((anim) => {
@@ -117,6 +125,29 @@ export default function Home() {
     ).start();
   }, [heartAnimations]);
 
+  const notifyMatch = useCallback(() => {
+    if (matchToastDisabled) return;
+    triggerMatchHearts();
+    if (matchVisibleRef.current) {
+      pendingMatchCountRef.current += 1;
+      return;
+    }
+    setMatchIsFollowUp(false);
+    setMatchVisible(true);
+  }, [matchToastDisabled, triggerMatchHearts]);
+
+  const dismissMatchModal = useCallback(() => {
+    if (pendingMatchCountRef.current > 0) {
+      pendingMatchCountRef.current -= 1;
+      setMatchIsFollowUp(true);
+      triggerMatchHearts();
+      setMatchVisible(true);
+      return;
+    }
+    setMatchVisible(false);
+    setMatchIsFollowUp(false);
+  }, [triggerMatchHearts]);
+
   const markDateSeen = useCallback((dateId: string) => {
     setSeenIds((prev) => (prev.includes(dateId) ? prev : [...prev, dateId]));
   }, []);
@@ -144,44 +175,34 @@ export default function Home() {
           return;
         }
 
-        const savePromise = saveSwipe(user.id, date.id, liked);
+        const cachedCoupleId = coupleIdRef.current;
+        const savePromise = saveSwipe(user.id, date.id, liked, cachedCoupleId);
+
+        if (liked && cachedCoupleId) {
+          addLike(date);
+          await savePromise;
+          const matched = await checkMatch(cachedCoupleId, date.id);
+          if (matched) {
+            notifyMatch();
+          }
+          markDateSeen(dateId);
+          await feedbackDone;
+          return;
+        }
 
         await feedbackDone;
-
-        let showMatchModal = false;
+        await savePromise;
         if (liked) {
           addLike(date);
-
-          const coupleId = await getCoupleId(user.id);
-          if (coupleId) {
-            const matched = await checkMatch(coupleId, date.id);
-            if (matched) {
-              triggerMatchHearts();
-              showMatchModal = !matchToastDisabled;
-            }
-          }
         }
-
-        await savePromise;
         markDateSeen(dateId);
-        if (showMatchModal) {
-          openMatchModal();
-        }
       } catch (error) {
         captureAppError(error, { op: "handleSwipe", dateId, liked });
         await feedbackDone;
         markDateSeen(dateId);
       }
     },
-    [
-      addLike,
-      isPro,
-      markDateSeen,
-      matchToastDisabled,
-      openMatchModal,
-      seenIds.length,
-      triggerMatchHearts,
-    ]
+    [addLike, isPro, markDateSeen, notifyMatch, seenIds.length]
   );
 
   handleSwipeRef.current = handleSwipe;
@@ -205,6 +226,9 @@ export default function Home() {
       const user = userData.user;
       if (!user) return;
       setUserId(user.id);
+
+      const resolvedCoupleId = await getCoupleId(user.id);
+      setCoupleId(resolvedCoupleId);
 
       const { data, error } = await supabase
         .from("swipes")
@@ -348,9 +372,13 @@ export default function Home() {
             <View style={styles.matchIconWrap}>
               <Text style={styles.matchIcon}>❤</Text>
             </View>
-            <Text style={styles.matchTitle}>It’s a match!</Text>
+            <Text style={styles.matchTitle}>
+              {matchIsFollowUp ? "Another match!" : "It’s a match!"}
+            </Text>
             <Text style={styles.matchSubtitle}>
-              You both loved this idea. Check your matches to plan it together.
+              {matchIsFollowUp
+                ? "You both loved another idea. Check your matches to plan them together."
+                : "You both loved this idea. Check your matches to plan it together."}
             </Text>
             <View style={styles.matchActions}>
               <Pressable
@@ -360,10 +388,12 @@ export default function Home() {
                 ]}
                 onPress={() => {
                   setMatchToastDisabled(true);
+                  pendingMatchCountRef.current = 0;
                   void AsyncStorage.setItem("matchModalDisabled", "true").catch((err) =>
                     captureAppError(err, { op: "asyncStorage_matchModal_disable", screen: "home" })
                   );
                   setMatchVisible(false);
+                  setMatchIsFollowUp(false);
                 }}
               >
                 <Text style={styles.matchButtonSecondaryText}>
@@ -375,7 +405,7 @@ export default function Home() {
                   styles.matchButton,
                   pressed && styles.matchButtonPressed,
                 ]}
-                onPress={() => setMatchVisible(false)}
+                onPress={dismissMatchModal}
               >
                 <Text style={styles.matchButtonText}>Dismiss</Text>
               </Pressable>

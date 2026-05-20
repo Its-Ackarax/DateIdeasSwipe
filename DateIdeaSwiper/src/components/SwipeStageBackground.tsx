@@ -1,6 +1,7 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { StyleSheet, View } from "react-native";
 import {
+  CARD_AREA_MARGIN_BOTTOM,
   CARD_HEIGHT,
   CARD_LEFT,
   CARD_TOP_OFFSET,
@@ -33,7 +34,7 @@ export default function SwipeStageBackground({
   cardHeight = CARD_HEIGHT,
   cardLeft = CARD_LEFT,
   cardTopOffset = CARD_TOP_OFFSET,
-  cardAreaMarginBottom = 28,
+  cardAreaMarginBottom = CARD_AREA_MARGIN_BOTTOM,
   pedestalBackOffsetY = PEDESTAL_BACK_OFFSET_Y,
   pedestalMidOffsetY = PEDESTAL_MID_OFFSET_Y,
   glowScale = GLOW_SCALE,
