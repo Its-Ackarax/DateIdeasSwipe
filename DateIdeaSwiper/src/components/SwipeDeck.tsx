@@ -56,10 +56,11 @@ type SwipeDeckProps = {
   swiperKey: number;
   onSwipedRight: (index: number) => void;
   onSwipedLeft: (index: number) => void;
+  onDeckExhausted?: () => void;
 };
 
 const SwipeDeck = forwardRef<SwipeDeckHandle, SwipeDeckProps>(function SwipeDeck(
-  { deckDates, swiperKey, onSwipedRight, onSwipedLeft },
+  { deckDates, swiperKey, onSwipedRight, onSwipedLeft, onDeckExhausted },
   ref
 ) {
   const [headIndex, setHeadIndex] = useState(0);
@@ -85,12 +86,19 @@ const SwipeDeck = forwardRef<SwipeDeckHandle, SwipeDeckProps>(function SwipeDeck
 
   headIndexRef.current = headIndex;
 
+  const onDeckExhaustedRef = useRef(onDeckExhausted);
+  onDeckExhaustedRef.current = onDeckExhausted;
+
   const completeSwipe = useCallback(
     (toRight: boolean) => {
       const index = headIndexRef.current;
+      const isLastCard = index >= cardsRef.current.length - 1;
       setHeadIndex((prev) => prev + 1);
       if (toRight) onSwipedRight(index);
       else onSwipedLeft(index);
+      if (isLastCard) {
+        onDeckExhaustedRef.current?.();
+      }
     },
     [onSwipedLeft, onSwipedRight]
   );
@@ -228,8 +236,8 @@ const SwipeDeck = forwardRef<SwipeDeckHandle, SwipeDeckProps>(function SwipeDeck
             duration: 180,
             useNativeDriver: true,
           }),
-        ]).start(({ finished }) => {
-          if (finished) resolve();
+        ]).start(() => {
+          resolve();
         });
       });
     },

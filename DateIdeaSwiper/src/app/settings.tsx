@@ -40,6 +40,7 @@ function deleteAccountRpcUserMessage(serverMessage: string): string {
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
+  const [deleteFinalDialogVisible, setDeleteFinalDialogVisible] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
   useAndroidNavigationBar({ backgroundColor: "#fff1f2", buttonStyle: "dark", position: "relative" });
 
@@ -58,7 +59,18 @@ export default function SettingsScreen() {
   }, []);
 
   const confirmDeleteAccount = useCallback(() => {
+    setDeleteFinalDialogVisible(false);
     setDeleteDialogVisible(true);
+  }, []);
+
+  const proceedToFinalDeleteConfirm = useCallback(() => {
+    setDeleteDialogVisible(false);
+    setDeleteFinalDialogVisible(true);
+  }, []);
+
+  const cancelDeleteFlow = useCallback(() => {
+    setDeleteDialogVisible(false);
+    setDeleteFinalDialogVisible(false);
   }, []);
 
   const deleteAccount = useCallback(async () => {
@@ -69,7 +81,7 @@ export default function SettingsScreen() {
       const user = userData.user;
       if (!user) {
         Alert.alert("Not signed in", "Sign in to delete your account.");
-        setDeleteDialogVisible(false);
+        cancelDeleteFlow();
         return;
       }
 
@@ -89,7 +101,7 @@ export default function SettingsScreen() {
         captureAppError(rcError, { op: "deleteAccount_logOutRevenueCat", screen: "settings" });
       }
       await clearOnboardingComplete();
-      setDeleteDialogVisible(false);
+      cancelDeleteFlow();
       router.replace("/onboarding" as Href);
     } catch (err) {
       captureAppError(err, { op: "deleteAccount", screen: "settings" });
@@ -97,7 +109,7 @@ export default function SettingsScreen() {
     } finally {
       setDeletingAccount(false);
     }
-  }, [deletingAccount]);
+  }, [cancelDeleteFlow, deletingAccount]);
 
   return (
     <AuthGate>
@@ -205,8 +217,18 @@ export default function SettingsScreen() {
         cancelText="Cancel"
         confirmText="Delete"
         destructive
+        onCancel={cancelDeleteFlow}
+        onConfirm={proceedToFinalDeleteConfirm}
+      />
+      <ConfirmDialog
+        visible={deleteFinalDialogVisible}
+        title="Are you sure?"
+        message="This is your last chance. Your account and all associated data will be permanently deleted."
+        cancelText="Cancel"
+        confirmText="Confirm Delete"
+        destructive
         loading={deletingAccount}
-        onCancel={() => setDeleteDialogVisible(false)}
+        onCancel={cancelDeleteFlow}
         onConfirm={deleteAccount}
       />
     </LinearGradient>

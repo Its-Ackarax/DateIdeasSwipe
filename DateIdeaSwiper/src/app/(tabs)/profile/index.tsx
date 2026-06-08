@@ -1,7 +1,15 @@
-import { View, Text, ActivityIndicator, Pressable, StyleSheet } from "react-native";
+import {
+  View,
+  Text,
+  ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  useWindowDimensions,
+} from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { LinearGradient } from "expo-linear-gradient";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "../../../lib/supabase";
 import { captureAppError } from "../../../lib/captureAppError";
@@ -9,8 +17,20 @@ import { clearOnboardingComplete } from "../../../lib/onboarding";
 import { type Href, router, useFocusEffect } from "expo-router";
 import ConfirmDialog from "../../../components/ConfirmDialog";
 
+const CARD_VERTICAL_MARGIN = 24;
+
 export default function Profile() {
   const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
+  const tabBarHeight = useBottomTabBarHeight();
+  const cardHeight = useMemo(
+    () =>
+      Math.max(
+        360,
+        windowHeight - insets.top - tabBarHeight - CARD_VERTICAL_MARGIN * 2
+      ),
+    [windowHeight, insets.top, tabBarHeight]
+  );
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [partner, setPartner] = useState<string | null>(null);
   const [coupleId, setCoupleId] = useState<string | null>(null);
@@ -219,12 +239,12 @@ export default function Profile() {
         style={[
           styles.pageInner,
           {
-            paddingTop: insets.top + 12,
-            paddingBottom: Math.max(insets.bottom, 16) + 16,
+            paddingTop: insets.top + CARD_VERTICAL_MARGIN,
+            paddingBottom: CARD_VERTICAL_MARGIN,
           },
         ]}
       >
-        <View style={styles.card}>
+        <View style={[styles.card, { height: cardHeight }]}>
           <View style={styles.hero}>
             <View style={styles.avatar}>
               <Text style={styles.avatarText}>
@@ -477,10 +497,12 @@ const styles = StyleSheet.create({
     flexDirection: "column",
     justifyContent: "flex-end",
     minHeight: 0,
+    paddingBottom: 14,
   },
   statsBlock: {
     alignSelf: "stretch",
-    paddingTop: 24,
+    paddingTop: 0
+    ,
   },
   actionsSection: {
     flexShrink: 0,
@@ -500,6 +522,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     color: "#6b7280",
     marginBottom: 8,
+    marginTop: 14,
   },
   chip: {
     alignSelf: "flex-start",
@@ -520,7 +543,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#f8fafc",
     borderRadius: 14,
-    paddingVertical: 18,
+    paddingVertical: 14,
     alignItems: "center",
     borderWidth: 1,
     borderColor: "rgba(244, 63, 94, 0.18)",

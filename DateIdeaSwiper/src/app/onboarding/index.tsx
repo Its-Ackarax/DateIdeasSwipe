@@ -272,7 +272,7 @@ export default function OnboardingScreen() {
                     source={require("../../../assets/images/icon.png")}
                     style={styles.logoImage}
                     contentFit="contain"
-                    accessibilityLabel="App logo placeholder"
+                    accessibilityLabel="DateSwiper app icon"
                   />
                 </View>
                 <HeartPill />

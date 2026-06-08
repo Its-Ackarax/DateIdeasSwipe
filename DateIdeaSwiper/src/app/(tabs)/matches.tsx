@@ -3,17 +3,19 @@ import { LinearGradient } from "expo-linear-gradient";
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-    ActivityIndicator,
-    Animated,
-    Modal,
-    PanResponder,
-    Platform,
-    Pressable,
-    StatusBar as RNStatusBar,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View,
+  ActivityIndicator,
+  Animated,
+  LayoutAnimation,
+  Modal,
+  PanResponder,
+  Platform,
+  Pressable,
+  StatusBar as RNStatusBar,
+  ScrollView,
+  StyleSheet,
+  Text,
+  UIManager,
+  View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import BrandStatusBar from "../../components/BrandStatusBar";
@@ -36,6 +38,17 @@ const EMPTY_CONTENT_TOP_OFFSET = 20;
 const EMPTY_HEADER_BODY_GAP = 44;
 /** Breathing room below the empty-state CTA (tab bar already excludes screen height). */
 const EMPTY_PAGE_BOTTOM_GAP = 0;
+/** Extra top inset on the unlinked matches screen. */
+const NO_PARTNER_CONTENT_TOP_OFFSET = 24;
+/** Breathing room below unlinked matches content (tab bar already excludes screen height). */
+const NO_PARTNER_CONTENT_BOTTOM_GAP = 12;
+
+if (
+  Platform.OS === "android" &&
+  UIManager.setLayoutAnimationEnabledExperimental
+) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 export default function Matches() {
   const [fontsLoaded] = useFonts({ Pacifico_400Regular });
@@ -48,6 +61,7 @@ export default function Matches() {
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
     () => new Set()
   );
+  const [howItWorksExpanded, setHowItWorksExpanded] = useState(false);
   const insets = useSafeAreaInsets();
   const topInset =
     Platform.OS === "android" ? (RNStatusBar.currentHeight ?? 0) + 8 : 8;
@@ -228,6 +242,11 @@ export default function Matches() {
     });
   }, []);
 
+  const toggleHowItWorks = useCallback(() => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setHowItWorksExpanded((prev) => !prev);
+  }, []);
+
   const allCollapsed = expandedCategories.size === 0;
   const useDistributedList = sections.length >= 5 && allCollapsed;
 
@@ -255,7 +274,14 @@ export default function Matches() {
         <View style={styles.topGlow} />
         <View style={styles.bottomGlow} />
         <ScrollView
-          contentContainerStyle={[styles.noPartnerScroll, { paddingTop: topInset }]}
+          contentContainerStyle={[
+            styles.noPartnerScroll,
+            {
+              paddingTop: topInset + NO_PARTNER_CONTENT_TOP_OFFSET,
+              paddingBottom: NO_PARTNER_CONTENT_BOTTOM_GAP,
+              justifyContent: howItWorksExpanded ? "flex-start" : "center",
+            },
+          ]}
           showsVerticalScrollIndicator={false}
         >
           <MatchesScreenHeader />
@@ -271,32 +297,68 @@ export default function Matches() {
             </Text>
           </View>
 
-          <View style={styles.noPartnerSteps}>
-            <Text style={styles.noPartnerStepsTitle}>How it works</Text>
-            <View style={styles.stepRow}>
-              <View style={styles.stepBadge}>
-                <Text style={styles.stepBadgeText}>1</Text>
+          <View
+            style={[
+              styles.noPartnerSteps,
+              !howItWorksExpanded && styles.noPartnerStepsCollapsed,
+            ]}
+          >
+            <Pressable
+              style={({ pressed }) => [
+                styles.noPartnerStepsHeader,
+                pressed && styles.noPartnerStepsHeaderPressed,
+              ]}
+              onPress={toggleHowItWorks}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: howItWorksExpanded }}
+              accessibilityLabel={
+                howItWorksExpanded
+                  ? "How it works, expanded. Tap to hide steps."
+                  : "How it works, collapsed. Tap to view steps."
+              }
+            >
+              <View style={styles.noPartnerStepsHeaderLeft}>
+                <Text style={styles.noPartnerStepsTitle}>How it works</Text>
+                {!howItWorksExpanded ? (
+                  <Text style={styles.noPartnerStepsHint}>Tap to view:</Text>
+                ) : null}
               </View>
-              <Text style={styles.stepText}>
-                Link your partner by following the instructions after pressing the link partner button.
+              <Text
+                style={[styles.noPartnerChevron, howItWorksExpanded && styles.noPartnerChevronExpanded]}
+              >
+                ›
               </Text>
-            </View>
-            <View style={styles.stepRow}>
-              <View style={styles.stepBadge}>
-                <Text style={styles.stepBadgeText}>2</Text>
+            </Pressable>
+
+            {howItWorksExpanded ? (
+              <View style={styles.noPartnerStepsBody}>
+                <View style={styles.stepRow}>
+                  <View style={styles.stepBadge}>
+                    <Text style={styles.stepBadgeText}>1</Text>
+                  </View>
+                  <Text style={styles.stepText}>
+                    Link your partner by following the instructions after pressing the link
+                    partner button.
+                  </Text>
+                </View>
+                <View style={styles.stepRow}>
+                  <View style={styles.stepBadge}>
+                    <Text style={styles.stepBadgeText}>2</Text>
+                  </View>
+                  <Text style={styles.stepText}>
+                    Keep swiping on the home tab - likes are saved for both of you.
+                  </Text>
+                </View>
+                <View style={styles.stepRow}>
+                  <View style={styles.stepBadge}>
+                    <Text style={styles.stepBadgeText}>3</Text>
+                  </View>
+                  <Text style={styles.stepText}>
+                    When you both like the same idea, it shows up here as a match.
+                  </Text>
+                </View>
               </View>
-              <Text style={styles.stepText}>
-                Keep swiping on the home tab - likes are saved for both of you.
-              </Text>
-            </View>
-            <View style={styles.stepRow}>
-              <View style={styles.stepBadge}>
-                <Text style={styles.stepBadgeText}>3</Text>
-              </View>
-              <Text style={styles.stepText}>
-                When you both like the same idea, it shows up here as a match.
-              </Text>
-            </View>
+            ) : null}
           </View>
 
           <Pressable
@@ -492,7 +554,6 @@ const styles = StyleSheet.create({
   noPartnerScroll: {
     flexGrow: 1,
     paddingHorizontal: PAGE_PADDING,
-    paddingBottom: 40,
   },
   noPartnerCard: {
     marginBottom: 16,
@@ -542,7 +603,22 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255, 255, 255, 0.88)",
     borderWidth: 1,
     borderColor: "rgba(15, 23, 42, 0.06)",
-    gap: 14,
+  },
+  noPartnerStepsCollapsed: {
+    paddingVertical: 12,
+  },
+  noPartnerStepsHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  noPartnerStepsHeaderPressed: {
+    opacity: 0.85,
+  },
+  noPartnerStepsHeaderLeft: {
+    flex: 1,
+    gap: 4,
   },
   noPartnerStepsTitle: {
     fontSize: 12,
@@ -550,7 +626,25 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
     textTransform: "uppercase",
     color: "#be123c",
-    marginBottom: 2,
+  },
+  noPartnerStepsHint: {
+    fontSize: 13,
+    color: "#64748b",
+    fontWeight: "500",
+  },
+  noPartnerChevron: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#94a3b8",
+    transform: [{ rotate: "0deg" }],
+  },
+  noPartnerChevronExpanded: {
+    transform: [{ rotate: "90deg" }],
+    color: "#be123c",
+  },
+  noPartnerStepsBody: {
+    marginTop: 14,
+    gap: 14,
   },
   stepRow: {
     flexDirection: "row",

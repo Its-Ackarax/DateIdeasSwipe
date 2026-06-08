@@ -14,6 +14,7 @@ import {
     View,
 } from "react-native";
 import BrandStatusBar from "../../components/BrandStatusBar";
+import { CARD_WIDTH, EMPTY_DECK_CARD_HEIGHT } from "../../constants/cardLayout";
 import SwipeDeck, { type SwipeDeckHandle } from "../../components/SwipeDeck";
 import SwipeStageBackground from "../../components/SwipeStageBackground";
 import { captureAppError } from "../../lib/captureAppError";
@@ -42,6 +43,7 @@ export default function Home() {
   const [dates, setDates] = useState<DateIdea[]>([]);
   const [seenIds, setSeenIds] = useState<string[]>([]);
   const [deckDates, setDeckDates] = useState<DateIdea[]>([]);
+  const [deckExhausted, setDeckExhausted] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [coupleId, setCoupleId] = useState<string | null>(null);
   const coupleIdRef = useRef<string | null>(null);
@@ -207,6 +209,12 @@ export default function Home() {
 
   handleSwipeRef.current = handleSwipe;
 
+  const handleDeckExhausted = useCallback(() => {
+    setDeckExhausted(true);
+    setDeckDates([]);
+    suppressDeckSyncRef.current = false;
+  }, []);
+
   const onSwipedRight = useCallback((index: number) => {
     const card = deckDatesRef.current[index];
     if (card) void handleSwipeRef.current(card, true);
@@ -266,6 +274,7 @@ export default function Home() {
   useFocusEffect(
     useCallback(() => {
       suppressDeckSyncRef.current = false;
+      setDeckExhausted(false);
       setLoading(true);
       loadSeen();
     }, [loadSeen])
@@ -281,9 +290,15 @@ export default function Home() {
 
   // Rebuild the swiper deck when loading from the server — not after each swipe (swiper advances on its own).
   useEffect(() => {
-    if (suppressDeckSyncRef.current) return;
     if (loading || datesLoading || !userId || dates.length === 0) return;
     const nextDeck = buildDeck();
+    if (nextDeck.length === 0) {
+      setDeckDates([]);
+      setDeckExhausted(true);
+      return;
+    }
+    if (suppressDeckSyncRef.current) return;
+    setDeckExhausted(false);
     setDeckDates(nextDeck);
     prefetchDateImages(nextDeck, 5);
   }, [buildDeck, loading, datesLoading, userId, dates.length]);
@@ -312,7 +327,7 @@ export default function Home() {
       <View style={styles.header}>
         <View style={styles.headerCard}>
           <View style={styles.headerLabel}>
-            <Text style={styles.headerLabelText}>Today’s picks</Text>
+            <Text style={styles.headerLabelText}>Date ideas</Text>
           </View>
           <View style={styles.headerTitleRow}>
             <Text style={styles.headerHeart}>❤</Text>
@@ -328,18 +343,31 @@ export default function Home() {
         pointerEvents={matchVisible ? "none" : "auto"}
       >
         <SwipeStageBackground />
-        {deckDates.length > 0 ? (
+        {deckDates.length > 0 && !deckExhausted ? (
           <SwipeDeck
             ref={swipeDeckRef}
             deckDates={deckDates}
             swiperKey={swiperKey}
             onSwipedRight={onSwipedRight}
             onSwipedLeft={onSwipedLeft}
+            onDeckExhausted={handleDeckExhausted}
           />
         ) : (
           <View style={styles.deckEmpty}>
-            <Text style={styles.deckEmptyTitle}>You&apos;re all caught up</Text>
-            <Text style={styles.deckEmptyText}>Check back tomorrow for fresh date ideas.</Text>
+            <View style={styles.deckEmptyCard}>
+              <View style={styles.deckEmptyIconWrap}>
+                <Text style={styles.deckEmptyIcon}>✨</Text>
+              </View>
+              <View style={styles.deckEmptyBadge}>
+                <Text style={styles.deckEmptyBadgeText}>Stay tuned</Text>
+              </View>
+              <Text style={styles.deckEmptyTitle}>More date cards</Text>
+              <Text style={styles.deckEmptyScript}>coming soon...</Text>
+              <View style={styles.deckEmptyDivider} />
+              <Text style={styles.deckEmptySubtitle}>
+                Fresh ideas are on the way for your next adventure together.
+              </Text>
+            </View>
           </View>
         )}
       </View>
@@ -497,20 +525,89 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+    paddingHorizontal: 16,
+    width: "100%",
+    zIndex: 2,
+    elevation: 2,
+  },
+  deckEmptyCard: {
+    width: CARD_WIDTH,
+    minHeight: EMPTY_DECK_CARD_HEIGHT,
+    backgroundColor: "rgba(255, 255, 255, 0.95)",
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: "rgba(244, 63, 94, 0.2)",
+    paddingVertical: 40,
     paddingHorizontal: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#7f1d1d",
+    shadowOpacity: 0.14,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 4,
+    gap: 10,
+  },
+  deckEmptyIconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(244, 63, 94, 0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(244, 63, 94, 0.16)",
+    marginBottom: 4,
+  },
+  deckEmptyIcon: {
+    fontSize: 28,
+  },
+  deckEmptyBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: "rgba(244, 63, 94, 0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(244, 63, 94, 0.14)",
+    marginBottom: 4,
+  },
+  deckEmptyBadgeText: {
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.9,
+    color: "#be123c",
+    textTransform: "uppercase",
   },
   deckEmptyTitle: {
-    fontSize: 20,
-    fontWeight: "700",
+    fontSize: 26,
     color: "#881337",
     textAlign: "center",
-    marginBottom: 8,
+    fontFamily: "Pacifico_400Regular",
+    lineHeight: 34,
   },
-  deckEmptyText: {
-    fontSize: 15,
+  deckEmptyScript: {
+    fontSize: 30,
+    color: "#e11d48",
+    textAlign: "center",
+    fontFamily: "DancingScript_700Bold",
+    lineHeight: 36,
+    marginTop: -4,
+  },
+  deckEmptyDivider: {
+    width: 48,
+    height: 3,
+    borderRadius: 999,
+    backgroundColor: "rgba(244, 63, 94, 0.35)",
+    marginVertical: 10,
+  },
+  deckEmptySubtitle: {
+    fontSize: 14,
     color: "#9f1239",
     textAlign: "center",
-    lineHeight: 22,
+    lineHeight: 21,
+    fontWeight: "500",
+    opacity: 0.85,
+    paddingHorizontal: 8,
   },
   matchBackdrop: {
     flex: 1,

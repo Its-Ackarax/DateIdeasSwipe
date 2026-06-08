@@ -147,10 +147,19 @@ export default function Login() {
               {loginLoading ? (
                 <View style={styles.loadingRow}>
                   <ActivityIndicator size="small" color="#ffffff" />
-                  <Text style={styles.primaryButtonText}>Signing in…</Text>
+                  <Text style={[styles.primaryButtonText, styles.primaryButtonTextActive]}>
+                    Signing in…
+                  </Text>
                 </View>
               ) : (
-                <Text style={styles.primaryButtonText}>Log in</Text>
+                <Text
+                  style={[
+                    styles.primaryButtonText,
+                    canSubmit && styles.primaryButtonTextActive,
+                  ]}
+                >
+                  Log in
+                </Text>
               )}
             </Pressable>
 
@@ -315,14 +324,18 @@ const styles = StyleSheet.create({
   primaryButtonReady: {
     backgroundColor: "rgba(251, 55, 111, 0.91)",
     borderColor: "rgba(190, 18, 60, 0.35)",
+    opacity: 1,
   },
   primaryButtonDisabled: {
     opacity: 0.75,
   },
   primaryButtonText: {
-    color: "rgb(255, 255, 255)",
+    color: "#fda4af",
     fontWeight: "800",
     fontSize: 16,
+  },
+  primaryButtonTextActive: {
+    color: "#ffffff",
   },
   loadingRow: {
     flexDirection: "row",
@@ -337,7 +350,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   linkText: {
-    color: "rgb(207, 84, 84)",
+    color: "#dc3848",
     fontWeight: "700",
   },
   linkPressed: {
