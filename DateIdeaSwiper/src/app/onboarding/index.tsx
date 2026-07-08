@@ -58,9 +58,14 @@ const ACCENT_SAPPHIRE = "#1d4ed8";
 function HeartPill({ compact, emphasized }: { compact?: boolean; emphasized?: boolean }) {
   return (
     <View style={[styles.heartPill, compact && styles.heartPillCompact, emphasized && styles.heartPillPage2]}>
-      <Text style={styles.heart}>❤</Text>
+      <Image
+        source={require("../../../assets/images/icon.png")}
+        style={[styles.brandIcon, compact && styles.brandIconCompact]}
+        contentFit="contain"
+        accessibilityLabel="Fondwell"
+      />
       <Text style={[styles.heartText, compact && styles.heartTextCompact, emphasized && styles.heartTextPage2]}>
-        Date Idea Swiper
+        Fondwell
       </Text>
     </View>
   );
@@ -272,7 +277,7 @@ export default function OnboardingScreen() {
                     source={require("../../../assets/images/icon.png")}
                     style={styles.logoImage}
                     contentFit="contain"
-                    accessibilityLabel="DateSwiper app icon"
+                    accessibilityLabel="Fondwell app icon"
                   />
                 </View>
                 <HeartPill />
@@ -697,9 +702,15 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     paddingHorizontal: 13,
   },
-  heart: {
-    fontSize: 16,
-    color: "#e11d48",
+  brandIcon: {
+    width: 20,
+    height: 20,
+    borderRadius: 5,
+  },
+  brandIconCompact: {
+    width: 16,
+    height: 16,
+    borderRadius: 4,
   },
   heartText: {
     fontSize: 12,

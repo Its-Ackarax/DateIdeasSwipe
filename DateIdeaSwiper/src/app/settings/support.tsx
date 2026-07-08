@@ -17,10 +17,17 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AuthGate from "../../components/AuthGate";
+import ConfirmDialog from "../../components/ConfirmDialog";
 import useAndroidNavigationBar from "../../hooks/useAndroidNavigationBar";
 import { captureAppError } from "../../lib/captureAppError";
 
-const SUPPORT_EMAIL = "dateswipersupport@gmail.com";
+type AlertState = {
+  visible: boolean;
+  title: string;
+  message: string;
+};
+
+const SUPPORT_EMAIL = "hello@fondwellapp.com";
 const SUPPORT_X_URL = "https://x.com/DeanRigneyDev";
 
 type SupportTopic = "Account" | "Linking" | "Bug" | "Billing" | "Other";
@@ -43,6 +50,19 @@ export default function SupportScreen() {
   useAndroidNavigationBar({ backgroundColor: "#fff1f2", buttonStyle: "dark", position: "relative" });
   const [message, setMessage] = useState("");
   const [topic, setTopic] = useState<SupportTopic>("Account");
+  const [alertState, setAlertState] = useState<AlertState>({
+    visible: false,
+    title: "",
+    message: "",
+  });
+
+  const openAlert = useCallback((title: string, messageText: string) => {
+    setAlertState({ visible: true, title, message: messageText });
+  }, []);
+
+  const closeAlert = useCallback(() => {
+    setAlertState((s) => ({ ...s, visible: false }));
+  }, []);
 
   const topicOptions = useMemo(
     () => [
@@ -58,12 +78,12 @@ export default function SupportScreen() {
   const sendEmail = useCallback(async () => {
     const trimmed = message.trim();
     if (!trimmed) {
-      Alert.alert("Message required", "Write a short message so we know how to help.");
+      openAlert("Message required", "Write a short message so we know how to help.");
       return;
     }
 
     const subject = `Support request: ${topic}`;
-    const body = `${trimmed}\n\n---\nApp: Date Idea Swiper\nPlatform: ${Platform.OS}`;
+    const body = `${trimmed}\n\n---\nApp: Fondwell\nPlatform: ${Platform.OS}`;
     const mailto = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(
       subject
     )}&body=${encodeURIComponent(body)}`;
@@ -85,12 +105,12 @@ export default function SupportScreen() {
         `Your draft was copied. Paste it into any email app, or write us at ${SUPPORT_EMAIL}.`
       );
     }
-  }, [message, topic]);
+  }, [message, topic, openAlert]);
 
   const openSupportX = useCallback(async () => {
     const trimmed = message.trim();
     if (!trimmed) {
-      Alert.alert("Message required", "Write your message above first, then send on X.");
+      openAlert("Message required", "Write your message above first, then send on X.");
       return;
     }
 
@@ -111,7 +131,7 @@ export default function SupportScreen() {
       captureAppError(error, { op: "support_openX", screen: "support" });
       Alert.alert("Can't open X", "Your message was copied. DM @DeanRigneyDev on X.");
     }
-  }, [message, topic]);
+  }, [message, topic, openAlert]);
 
   return (
     <AuthGate>
@@ -217,6 +237,16 @@ export default function SupportScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+      <ConfirmDialog
+        visible={alertState.visible}
+        title={alertState.title}
+        message={alertState.message}
+        confirmText="OK"
+        hideCancel
+        confirmPink
+        onCancel={closeAlert}
+        onConfirm={closeAlert}
+      />
     </LinearGradient>
     </AuthGate>
   );

@@ -5,13 +5,19 @@ import { LinearGradient } from "expo-linear-gradient";
 import * as Linking from "expo-linking";
 import { type Href, router } from "expo-router";
 import { useCallback, useState } from "react";
-import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Linking as RNLinking, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AuthGate from "../components/AuthGate";
 import ConfirmDialog from "../components/ConfirmDialog";
 import SettingsRow from "../components/SettingsRow";
 import useAndroidNavigationBar from "../hooks/useAndroidNavigationBar";
 import { clearOnboardingComplete } from "../lib/onboarding";
+import {
+  getNotificationPermissionStatus,
+  registerForPushNotifications,
+  removePushToken,
+  savePushToken,
+} from "../lib/pushNotifications";
 import { logOutRevenueCat } from "../lib/revenuecat";
 import { supabase } from "../lib/supabase";
 
@@ -42,6 +48,8 @@ export default function SettingsScreen() {
   const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
   const [deleteFinalDialogVisible, setDeleteFinalDialogVisible] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
+  const [notificationsEnabledVisible, setNotificationsEnabledVisible] = useState(false);
+  const [notificationsDeniedVisible, setNotificationsDeniedVisible] = useState(false);
   useAndroidNavigationBar({ backgroundColor: "#fff1f2", buttonStyle: "dark", position: "relative" });
 
   const openUrl = useCallback(async (url: string) => {
@@ -55,6 +63,43 @@ export default function SettingsScreen() {
     } catch (error) {
       captureAppError(error, { op: "settings_openUrl", screen: "settings" });
       Alert.alert("Can't open link", "Something went wrong opening that link.");
+    }
+  }, []);
+
+  const handleNotificationsPress = useCallback(async () => {
+    const status = await getNotificationPermissionStatus();
+
+    if (status === "granted") {
+      setNotificationsEnabledVisible(true);
+      return;
+    }
+
+    if (status === "denied") {
+      setNotificationsDeniedVisible(true);
+      return;
+    }
+
+    const token = await registerForPushNotifications();
+    if (!token) {
+      setNotificationsDeniedVisible(true);
+      return;
+    }
+
+    const { data: userData } = await supabase.auth.getUser();
+    const userId = userData.user?.id;
+    if (userId) {
+      await savePushToken(userId, token);
+    }
+
+    setNotificationsEnabledVisible(true);
+  }, []);
+
+  const openSystemSettings = useCallback(async () => {
+    setNotificationsDeniedVisible(false);
+    try {
+      await RNLinking.openSettings();
+    } catch (error) {
+      captureAppError(error, { op: "settings_openNotificationSettings", screen: "settings" });
     }
   }, []);
 
@@ -94,6 +139,7 @@ export default function SettingsScreen() {
       }
 
       await AsyncStorage.removeItem("matchModalDisabled");
+      await removePushToken();
       await supabase.auth.signOut({ scope: "local" });
       try {
         await logOutRevenueCat();
@@ -135,11 +181,9 @@ export default function SettingsScreen() {
             <View style={styles.stack}>
               <SettingsRow
                 title="Notifications"
-                subtitle="Manage reminders and activity alerts"
+                subtitle="Match alerts when your partner likes the same date"
                 icon="notifications-outline"
-                onPress={() =>
-                  Alert.alert("Coming soon", "Notification settings will be available in a future update.")
-                }
+                onPress={handleNotificationsPress}
               />
             </View>
           </View>
@@ -210,6 +254,26 @@ export default function SettingsScreen() {
           </View>
         </ScrollView>
       </View>
+      <ConfirmDialog
+        visible={notificationsEnabledVisible}
+        title="Match alerts are on"
+        message="We'll notify you when you and your partner both like the same date idea."
+        confirmText="OK"
+        hideCancel
+        confirmPink
+        onCancel={() => setNotificationsEnabledVisible(false)}
+        onConfirm={() => setNotificationsEnabledVisible(false)}
+      />
+      <ConfirmDialog
+        visible={notificationsDeniedVisible}
+        title="Turn on match alerts"
+        message="Enable notifications in your device settings so we can tell you when you get a new match."
+        cancelText="Cancel"
+        confirmText="Open Settings"
+        confirmPink
+        onCancel={() => setNotificationsDeniedVisible(false)}
+        onConfirm={openSystemSettings}
+      />
       <ConfirmDialog
         visible={deleteDialogVisible}
         title="Delete?"

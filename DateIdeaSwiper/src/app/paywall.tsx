@@ -77,7 +77,7 @@ export default function PaywallScreen() {
           },
         ]}
       >
-        <Text style={styles.kicker}>DateSwiper Pro</Text>
+        <Text style={styles.kicker}>Fondwell Pro</Text>
         <Text style={styles.title}>Unlock unlimited swipes</Text>
         <Text style={styles.subtitle}>
           Upgrade to keep exploring date ideas and matching with your partner.

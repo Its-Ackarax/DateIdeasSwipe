@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import { useMemo, useState } from "react";
@@ -100,12 +101,17 @@ export default function Signup() {
         >
           <View style={styles.hero}>
             <View style={styles.heartPill}>
-              <Text style={styles.heart}>❤</Text>
-              <Text style={styles.heartText}>Date Idea Swiper</Text>
+              <Image
+                source={require("../../../assets/images/icon.png")}
+                style={styles.brandIcon}
+                contentFit="contain"
+                accessibilityLabel="Fondwell"
+              />
+              <Text style={styles.heartText}>Fondwell</Text>
             </View>
             <Text style={styles.title}>Create an account</Text>
             <Text style={styles.subtitle}>
-              Swipe on date ideas to make finding the perfect date with your partner easier!
+              Date ideas, together.
             </Text>
           </View>
 
@@ -267,9 +273,10 @@ const styles = StyleSheet.create({
     borderColor: "rgba(244, 63, 94, 0.2)",
     marginBottom: 14,
   },
-  heart: {
-    fontSize: 16,
-    color: "#e11d48",
+  brandIcon: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
   },
   heartText: {
     fontSize: 12,

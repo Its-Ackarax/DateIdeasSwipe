@@ -1,8 +1,9 @@
 import { LinearGradient } from "expo-linear-gradient";
+import { Image } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
 import Constants from "expo-constants";
 import * as Linking from "expo-linking";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -26,7 +27,11 @@ export default function Login() {
   const [loginLoading, setLoginLoading] = useState(false);
   const [resetSending, setResetSending] = useState(false);
   const [resetMessage, setResetMessage] = useState("");
+  const [resetError, setResetError] = useState("");
+  const [resetCooldown, setResetCooldown] = useState(0);
   const [emailFirstVisible, setEmailFirstVisible] = useState(false);
+  const [loginErrorVisible, setLoginErrorVisible] = useState(false);
+  const [loginErrorMessage, setLoginErrorMessage] = useState("");
   const canSubmit = useMemo(
     () => Boolean(email.trim()) && Boolean(password) && !loginLoading,
     [email, password, loginLoading]
@@ -41,7 +46,16 @@ export default function Login() {
     });
 
     if (error) {
-      alert(error.message);
+      const raw = (error.message || "").toLowerCase();
+      const isInvalidCredentials =
+        raw.includes("invalid login credentials") ||
+        raw.includes("invalid email or password");
+      setLoginErrorMessage(
+        isInvalidCredentials
+          ? "The email or password you entered is incorrect. Please double-check and try again."
+          : error.message || "Something went wrong. Please try again."
+      );
+      setLoginErrorVisible(true);
       setLoginLoading(false);
       return;
     }
@@ -51,14 +65,46 @@ export default function Login() {
     setLoginLoading(false);
   }
 
+  useEffect(() => {
+    if (resetCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setResetCooldown((prev) => (prev <= 1 ? 0 : prev - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resetCooldown]);
+
+  function passwordResetErrorMessage(error) {
+    const status = error?.status;
+    const raw = (error?.message || "").toLowerCase();
+    const isRateLimited =
+      status === 429 ||
+      raw.includes("rate limit") ||
+      raw.includes("for security purposes") ||
+      raw.includes("you can only request");
+    if (isRateLimited) {
+      const secondsMatch = raw.match(/after (\d+) seconds?/);
+      const seconds = secondsMatch ? Number(secondsMatch[1]) : 60;
+      return {
+        seconds,
+        text: "Too many reset requests. Please wait a moment and try again.",
+      };
+    }
+    return {
+      seconds: 0,
+      text: error?.message || "Could not send reset link. Please try again.",
+    };
+  }
+
   async function sendPasswordReset() {
     if (!email) {
       setEmailFirstVisible(true);
       return;
     }
+    if (resetSending || resetCooldown > 0) return;
 
     setResetSending(true);
     setResetMessage("");
+    setResetError("");
     const owner = Constants.expoConfig?.owner;
     const slug = Constants.expoConfig?.slug;
     const redirectTo =
@@ -70,9 +116,12 @@ export default function Login() {
     });
 
     if (error) {
-      alert(error.message);
+      const { seconds, text } = passwordResetErrorMessage(error);
+      setResetError(text);
+      if (seconds > 0) setResetCooldown(seconds);
     } else {
       setResetMessage("Check your email for a reset link.");
+      setResetCooldown(60);
     }
 
     setResetSending(false);
@@ -92,8 +141,13 @@ export default function Login() {
         >
           <View style={styles.hero}>
             <View style={styles.heartPill}>
-              <Text style={styles.heart}>❤</Text>
-              <Text style={styles.heartText}>Date Idea Swiper</Text>
+              <Image
+                source={require("../../../assets/images/icon.png")}
+                style={styles.brandIcon}
+                contentFit="contain"
+                accessibilityLabel="Fondwell"
+              />
+              <Text style={styles.heartText}>Fondwell</Text>
             </View>
             <Text style={styles.title}>Welcome back</Text>
             <Text style={styles.subtitle}>
@@ -164,20 +218,37 @@ export default function Login() {
             </Pressable>
 
             <Pressable
-              disabled={resetSending || loginLoading}
+              disabled={resetSending || loginLoading || resetCooldown > 0}
               onPress={sendPasswordReset}
               style={({ pressed }) => [
                 styles.linkButton,
-                pressed && !resetSending && !loginLoading && styles.linkPressed,
+                pressed &&
+                  !resetSending &&
+                  !loginLoading &&
+                  resetCooldown === 0 &&
+                  styles.linkPressed,
               ]}
             >
-              <Text style={styles.linkText}>
-                {resetSending ? "Sending reset link..." : "Forgot password?"}
+              <Text
+                style={[
+                  styles.linkText,
+                  resetCooldown > 0 && styles.linkTextDisabled,
+                ]}
+              >
+                {resetSending
+                  ? "Sending reset link..."
+                  : resetCooldown > 0
+                  ? `Try again in ${resetCooldown}s`
+                  : "Forgot password?"}
               </Text>
             </Pressable>
 
             {resetMessage ? (
               <Text style={styles.successText}>{resetMessage}</Text>
+            ) : null}
+
+            {resetError ? (
+              <Text style={styles.errorText}>{resetError}</Text>
             ) : null}
 
             <View style={styles.dividerRow}>
@@ -207,6 +278,16 @@ export default function Login() {
         confirmPink
         onCancel={() => setEmailFirstVisible(false)}
         onConfirm={() => setEmailFirstVisible(false)}
+      />
+      <ConfirmDialog
+        visible={loginErrorVisible}
+        title="Login failed"
+        message={loginErrorMessage}
+        confirmText="Try again"
+        cancelText={null}
+        confirmPink
+        onCancel={() => setLoginErrorVisible(false)}
+        onConfirm={() => setLoginErrorVisible(false)}
       />
     </LinearGradient>
   );
@@ -251,9 +332,10 @@ const styles = StyleSheet.create({
     borderColor: "rgba(244, 63, 94, 0.2)",
     marginBottom: 14,
   },
-  heart: {
-    fontSize: 16,
-    color: "#e11d48",
+  brandIcon: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
   },
   heartText: {
     fontSize: 12,
@@ -353,12 +435,21 @@ const styles = StyleSheet.create({
     color: "#dc3848",
     fontWeight: "700",
   },
+  linkTextDisabled: {
+    color: "#94a3b8",
+  },
   linkPressed: {
     opacity: 0.8,
   },
   successText: {
     marginTop: 10,
     color: "#15803d",
+    textAlign: "center",
+    fontWeight: "700",
+  },
+  errorText: {
+    marginTop: 10,
+    color: "#dc2626",
     textAlign: "center",
     fontWeight: "700",
   },

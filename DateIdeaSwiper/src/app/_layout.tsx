@@ -1,10 +1,11 @@
-import { Stack } from "expo-router";
+import { Stack, router } from "expo-router";
 import { LikesProvider } from "../store/LikesContext";
 import { useEffect, useMemo, useState } from "react";
 import { StyleSheet } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import Purchases from "react-native-purchases";
 import analytics from "@react-native-firebase/analytics";
+import * as Notifications from "expo-notifications";
 import { supabase } from "../lib/supabase";
 import '../../firebase.js';
 import '../../analytics.js';
@@ -17,6 +18,12 @@ import {
   logOutRevenueCat,
 } from "../lib/revenuecat";
 import { captureAppError } from "../lib/captureAppError";
+import {
+  configureForegroundNotifications,
+  getMatchNotificationRoute,
+  syncPushTokenForUser,
+  type MatchNotificationData,
+} from "../lib/pushNotifications";
 import * as Sentry from "@sentry/react-native";
 
 Sentry.init({
@@ -42,6 +49,10 @@ function RootLayout() {
   }, []);
 
   useEffect(() => {
+    configureForegroundNotifications();
+  }, []);
+
+  useEffect(() => {
     let active = true;
 
     (async () => {
@@ -56,6 +67,14 @@ function RootLayout() {
       }
 
       await configureRevenueCat(userId);
+
+      if (userId) {
+        try {
+          await syncPushTokenForUser(userId);
+        } catch (error) {
+          captureAppError(error, { op: "push_sync_initial", userId });
+        }
+      }
 
       try {
         const info = await Purchases.getCustomerInfo();
@@ -81,6 +100,14 @@ function RootLayout() {
       } catch (error) {
         captureAppError(error, { op: "analytics_setUserId", phase: "auth_change" });
       }
+
+      if (userId) {
+        try {
+          await syncPushTokenForUser(userId);
+        } catch (error) {
+          captureAppError(error, { op: "push_sync_auth", userId });
+        }
+      }
     });
 
     const maybeUnsubscribe = (Purchases.addCustomerInfoUpdateListener((info) => {
@@ -94,6 +121,31 @@ function RootLayout() {
       sub?.subscription?.unsubscribe?.();
       maybeUnsubscribe?.();
     };
+  }, []);
+
+  useEffect(() => {
+    const navigateFromNotification = (data: MatchNotificationData | undefined) => {
+      const route = getMatchNotificationRoute(data);
+      if (route) {
+        router.push(route);
+      }
+    };
+
+    Notifications.getLastNotificationResponseAsync().then((response) => {
+      if (response) {
+        navigateFromNotification(
+          response.notification.request.content.data as MatchNotificationData
+        );
+      }
+    });
+
+    const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+      navigateFromNotification(
+        response.notification.request.content.data as MatchNotificationData
+      );
+    });
+
+    return () => subscription.remove();
   }, []);
 
   const proValue = useMemo(() => ({ customerInfo, isPro }), [customerInfo, isPro]);

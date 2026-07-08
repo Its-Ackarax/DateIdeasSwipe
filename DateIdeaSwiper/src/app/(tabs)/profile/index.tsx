@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "../../../lib/supabase";
 import { captureAppError } from "../../../lib/captureAppError";
 import { clearOnboardingComplete } from "../../../lib/onboarding";
+import { removePushToken } from "../../../lib/pushNotifications";
 import { type Href, router, useFocusEffect } from "expo-router";
 import ConfirmDialog from "../../../components/ConfirmDialog";
 
@@ -203,6 +204,7 @@ export default function Profile() {
     if (loggingOut) return;
     setLoggingOut(true);
     try {
+      await removePushToken();
       const { error } = await supabase.auth.signOut();
       if (error) captureAppError(error, { op: "signOut", screen: "profile" });
       setLogoutDialogVisible(false);
